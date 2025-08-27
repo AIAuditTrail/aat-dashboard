@@ -12,8 +12,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@moralisweb3/common-evm-utils": "^2.27.2",
+    "@mysten/sui.js": "^0.54.1",
     "echarts": "^6.0.0",
+    "graphql-request": "^7.2.0",
     "jquery": "^3.7.1",
+    "moralis": "^2.27.2",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1",
     "vue3-marquee": "^4.2.2",

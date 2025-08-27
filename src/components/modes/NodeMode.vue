@@ -1,100 +1,145 @@
 <template>
-  <div ref="chartEl" style="width: 100%; height: 100%;"></div>
+  <div class="node-mode-container">
+    <div v-if="loading" class="loading-skeleton"></div>
+    <div v-else-if="error" class="error-message">节点数据加载失败...</div>
+    <div v-else ref="chartRef" style="width: 100%; height: 100%;"></div>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { getNodes } from '@/api'
 
-const chartEl = ref(null)
+const props = defineProps({
+  nodes: {
+    type: Array,
+    default: () => []
+  },
+  loading: {
+    type: Boolean,
+    default: true
+  },
+  error: {
+    type: Object,
+    default: null
+  }
+})
+
+const chartRef = ref(null)
 let chartInstance = null
 
-// 风险值在 1~100 之间（或可以根据实际情况设置最大值）
-function getColorByRisk(risk, min = 1, max = 100) {
-  // 0（绿） → 120°，100（红） → 0°
-  const hue = Math.max(0, 120 - ((risk - min) / (max - min)) * 120)
-  return `hsl(${hue}, 100%, 50%)`
-}
+const emit = defineEmits(['node-selected'])
 
-// 生命周期钩子必须 setup 顶层注册
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', resizeHandler)
-  if (chartInstance && !chartInstance.isDisposed()) {
-    chartInstance.dispose()
-  }
+const riskLevelColors = {
+  1: '#62f49c', 2: '#25f3e6', 3: '#f4e562', 4: '#ff9900', 5: '#ff4e4e',
+};
+
+const sortedNodes = computed(() => {
+  return [...props.nodes].sort((a, b) => {
+    return b.effective_level - a.effective_level || a.name.localeCompare(b.name)
+  })
 })
 
-// resize handler 也必须在顶层定义
-const resizeHandler = () => {
-  if (chartInstance && !chartInstance.isDisposed()) {
-    chartInstance.resize()
-  }
-}
+const updateChart = () => {
+  if (!chartInstance || !chartRef.value) return;
 
-onMounted(async () => {
-  await nextTick()
+  const { width, height } = chartRef.value.getBoundingClientRect();
+  if (width === 0 || height === 0) return;
 
-  if (!chartEl.value) return
-
-  const nodes = await getNodes()
-
-  const oldInstance = echarts.getInstanceByDom(chartEl.value)
-  if (oldInstance && !oldInstance.isDisposed()) {
-    oldInstance.dispose()
-  }
-
-  chartInstance = echarts.init(chartEl.value)
-
-  // const colors = ['#00ff00', '#99cc00', '#ffff00', '#ff9900', '#ff0000']
-  const echartsNodes = nodes.map(node => ({
-    ...node,
-    x: Math.random() * 800,
-    y: Math.random() * 600,
-    symbolSize: 40,
+  const chartData = sortedNodes.value.map((node) => ({
+    id: node.id,
+    name: node.name,
+    value: node.effective_level,
+    symbolSize: 30 + node.effective_level * 5,
     itemStyle: {
-      color: getColorByRisk(node.risk)
+      color: riskLevelColors[node.effective_level] || '#ccc',
     },
-    draggable: true
-  }))
-
+  }));
+  
   chartInstance.setOption({
-    backgroundColor: '#081832',
-    tooltip: {
-      formatter: params =>
-          `${params.data.name}<br>风险等级：${params.data.risk}<br>位置：${params.data.geo}`
-    },
-    animation: true,
-    series: [
-      {
-        type: 'graph',
-        layout: 'force',
-        roam: true,
-        label: { show: true, color: '#ffffff' },
-        force: { repulsion: 200, gravity: 0.1, edgeLength: 50 },
-        data: echartsNodes
-      }
-    ]
-  })
+    series: [{ data: chartData }]
+  });
+};
 
-  chartInstance.on('click', params => {
-    const data = params.data
-    const detailBox = document.getElementById('nodeDetailBox')
-    if (detailBox) {
-      detailBox.innerHTML = `
-        <p><strong>名称：</strong>${data.name}</p>
-        <p><strong>风险等级：</strong>${data.risk}</p>
-        <p><strong>地理位置：</strong>${data.geo}</p>
-        <p><strong>描述：</strong>${data.desc}</p>
-      `
+const resizeHandler = () => chartInstance?.resize();
+
+onMounted(() => {
+    if (chartRef.value) {
+        chartInstance = echarts.init(chartRef.value);
+
+        chartInstance.setOption({
+            backgroundColor: 'transparent',
+            tooltip: {
+                formatter: ({ data }) => `${data.name}<br/>风险等级: ${data.value}`
+            },
+            series: [{
+                type: 'graph',
+                layout: 'force',
+                roam: true,
+                force: {
+                    repulsion: 150, // Controls distance between nodes
+                    gravity: 0.1,   // Pulls nodes towards the center
+                    friction: 0.6
+                },
+                label: {
+                    show: true,
+                    position: 'bottom',
+                    color: '#fff',
+                    formatter: '{b}'
+                },
+                data: [], // Initially empty
+            }]
+        });
+
+        chartInstance.on('click', (params) => {
+            if (params.dataType === 'node') {
+                emit('node-selected', params.data.id);
+            }
+        });
+        
+        if (!props.loading && props.nodes.length) {
+            updateChart();
+        }
+
+        window.addEventListener('resize', resizeHandler);
     }
-  })
+});
 
-  // add listener AFTER chartInstance created
-  window.addEventListener('resize', resizeHandler)
-})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeHandler);
+  if (chartInstance) {
+    chartInstance.dispose();
+    chartInstance = null;
+  }
+});
+
+watch(() => props.nodes, () => {
+  if (chartInstance) {
+    updateChart();
+  }
+}, { deep: true });
 </script>
 
 <style scoped>
-/* optional */
+.node-mode-container {
+  width: 100%;
+  height: 100%;
+}
+.loading-skeleton {
+  width: 100%;
+  height: 100%;
+  background-color: #2a3a4a;
+  border-radius: 4px;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+.error-message {
+  color: #ff6b6b;
+  text-align: center;
+  padding-top: 50px;
+}
+@keyframes pulse {
+  0% { background-color: #2a3a4a; }
+  50% { background-color: #3a4a5a; }
+  100% { background-color: #2a3a4a; }
+}
 </style>

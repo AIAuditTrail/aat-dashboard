@@ -2,11 +2,11 @@
   <!--顶部-->
   <div class="con left">
     <TopHeader />
-    <OverviewStats />
+    <OverviewStats :stats="stats.data" :loading="stats.loading" />
 
     <div class="div_any">
       <!-- 左侧图表 -->
-      <ChartsPanel />
+      <ChartsPanel :stats="stats.data" :loading="stats.loading" />
 
       <!-- 模式切换区域 -->
       <div class="div_any02 left">
@@ -20,21 +20,23 @@
 
           <!-- 图表展示区域 -->
           <div class="chart-container">
-            <MapMode v-if="mode === 'map'" />
-            <NodeMode v-if="mode === 'node'" />
-            <ListMode v-if="mode === 'list'" />
+            <MapMode v-if="mode === 'map'" :provinces="stats.data?.provinces" @province-selected="handleProvinceSelected" />
+            <NodeMode v-if="mode === 'node'" :nodes="nodes.data" :loading="nodes.loading" :error="nodes.error" @node-selected="handleNodeSelected" />
+            <ListMode v-if="mode === 'list'" :nodes="nodes.data" :loading="nodes.loading" :error="nodes.error" @node-selected="handleNodeSelected" />
           </div>
         </div>
       </div>
 
       <!-- 节点右侧详情栏 -->
-      <NodeSidebar />
+      <NodeSidebar :node-id="selectedNodeId" :province="selectedProvince" :stats="stats.data" />
     </div>
+
+    <!-- 独立的警报滚动区 -->
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, reactive, watch } from 'vue'
 import MapMode from '@/components/modes/MapMode.vue'
 import NodeMode from '@/components/modes/NodeMode.vue'
 import ListMode from '@/components/modes/ListMode.vue'
@@ -42,14 +44,85 @@ import NodeSidebar from '@/components/NodeSidebar.vue'
 import TopHeader from '@/components/TopHeader.vue'
 import OverviewStats from '@/components/OverviewStats.vue'
 import ChartsPanel from '@/components/ChartsPanel.vue'
+import { getStatsOverview, getNodes } from '@/api'
 
 const mode = ref('map')
+
+const stats = reactive({ data: null, loading: true, error: null })
+const nodes = reactive({ data: [], loading: true, error: null })
+const selectedNodeId = ref(null)
+const selectedProvince = ref(null)
+
+async function fetchStats() {
+  try {
+    stats.loading = true
+    const rawData = await getStatsOverview({ tz: 'Asia/Shanghai', includeResolved: true })
+    
+    if (rawData) {
+      // Process data to add any top-level stats needed by child components
+      const totalNodes = rawData.provinces.reduce((sum, p) => sum + p.total_nodes, 0);
+
+      stats.data = {
+        ...rawData, // Keep original structured data
+        total_nodes: totalNodes, // Add calculated total
+      };
+    } else {
+      stats.data = null; // Handle case where API returns null
+    }
+
+  } catch (err) {
+    stats.error = err
+    stats.data = null;
+  } finally {
+    stats.loading = false
+  }
+}
+
+async function fetchNodes() {
+  try {
+    nodes.loading = true
+    nodes.data = await getNodes({}) // Simplified for now
+  } catch (err) {
+    nodes.error = err
+  } finally {
+    nodes.loading = false
+  }
+}
+
+function handleNodeSelected(nodeId) {
+  selectedNodeId.value = nodeId
+  selectedProvince.value = null // Clear province on node selection
+}
+
+function handleProvinceSelected(province) {
+  selectedProvince.value = province
+  selectedNodeId.value = null // Clear node on province selection
+}
+
+onMounted(() => {
+  fetchStats()
+  fetchNodes()
+})
 </script>
 
 <style scoped>
 @import '../assets/common.css';
 
-/* 模式切换按钮容器 */
+.con {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.div_any {
+  display: flex;
+  flex-grow: 1;
+  align-items: stretch;
+  min-height: 0;
+}
+
+/* ... existing styles ... */
 .tab-container {
   display: flex;
   justify-content: center;
@@ -60,7 +133,6 @@ const mode = ref('map')
   border-bottom: 1px solid #3a4a5c;
 }
 
-/* 模式按钮样式 */
 .tab-btn {
   padding: 6px 16px;
   min-width: 80px;
@@ -71,9 +143,6 @@ const mode = ref('map')
   color: #fff;
   border: 1px solid #3a4a5c;
   border-radius: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -83,13 +152,28 @@ const mode = ref('map')
   border-color: #2f4f75;
 }
 
-/* 图表区域，避免按钮遮挡 */
+.div_any02 {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.div_any02 > .div_any_child {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.tab-container {
+  flex-shrink: 0;
+}
 .chart-container {
-  width: 97.5%;
-  height: calc(95% - 50px); /* 减去按钮高度 */
-  display: inline-block;
-  padding-left: 1.25%;
-  padding-top: 10px;
+  flex-grow: 1;
+  width: 100%;
+  padding: 10px 1.25%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>
