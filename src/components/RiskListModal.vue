@@ -31,7 +31,17 @@
                 <div class="detail-row full-width"><strong>描述:</strong> <p>{{ selectedAlert.description }}</p></div>
             </div>
             <div class="detail-actions">
-              <button type="button" class="btn-primary" @click="goToTrace(selectedAlert.id)">风险溯源</button>
+              <button type="button" class="btn-primary" @click="goToTrace(selectedAlert.id, 'alert')">发起新溯源</button>
+            </div>
+            
+            <div v-if="selectedAlert.traceRuns && selectedAlert.traceRuns.length > 0" class="trace-runs-section">
+              <h4>历史溯源记录</h4>
+              <ul class="trace-run-list">
+                <li v-for="run in selectedAlert.traceRuns" :key="run.id" class="trace-run-item">
+                  <span>{{ new Date(run.computed_at).toLocaleString() }}</span>
+                  <button class="btn-secondary" @click="goToTrace(run.id, 'trace')">回放</button>
+                </li>
+              </ul>
             </div>
         </div>
       </div>
@@ -101,9 +111,13 @@ const backToList = () => {
   currentView.value = 'list';
 };
 
-const goToTrace = (alertId) => {
+const goToTrace = (id, type) => {
   close(); // Close the modal before navigating
-  router.push({ name: 'Trace', params: { alert_id: alertId } });
+  if (type === 'alert') {
+    router.push({ name: 'Trace', params: { alert_id: id } });
+  } else {
+    router.push({ name: 'Trace', query: { trace_run_id: id } });
+  }
 };
 
 const close = () => {
@@ -151,7 +165,12 @@ const close = () => {
 }
 .risk-detail .detail-row.full-width { grid-column: 1 / -1; }
 .risk-detail p { margin: 5px 0 0; }
-.detail-actions { margin-top: 20px; text-align: right; }
+.detail-actions { margin-top: 20px; }
+.trace-runs-section { margin-top: 20px; border-top: 1px solid #3a4a5c; padding-top: 15px; }
+.trace-runs-section h4 { margin-top: 0; margin-bottom: 10px; }
+.trace-run-list { list-style: none; padding: 0; margin: 0; }
+.trace-run-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #3a4a5c; }
+.trace-run-item:last-child { border-bottom: none; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .btn-primary, .btn-secondary {
   padding: 8px 15px; border-radius: 4px; border: none; cursor: pointer;

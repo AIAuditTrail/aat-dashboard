@@ -13,13 +13,11 @@ async function request(endpoint, options = {}) {
 
         const responseText = await response.text();
         
-        // If the response is empty, return null to avoid JSON parsing errors.
         if (!responseText) {
             console.warn(`[API] Received empty response for endpoint: ${endpoint}`);
             return null;
         }
 
-        // Try to parse the JSON
         return JSON.parse(responseText);
 
     } catch (error) {
@@ -50,6 +48,10 @@ export const getNodeDetails = (id) => {
 
 export const getNeighbors = (id) => {
     return request(`/nodes/${id}/neighbors`);
+};
+
+export const getNodeTrajectories = (id) => {
+    return request(`/nodes/${id}/trajectories`);
 };
 
 // 3. Trajectories API

@@ -33,7 +33,7 @@
 
 <script setup>
 import { ref, reactive, watch } from 'vue'
-import { getTrajectories } from '@/api'
+import { getNodeTrajectories } from '@/api'
 
 const props = defineProps({
   show: Boolean,
@@ -51,22 +51,23 @@ const form = reactive({
   description: '',
 })
 
-const fetchTrajectories = async () => {
+const fetchNodeTrajectories = async (nodeId) => {
+  if (!nodeId) return;
   try {
-    const data = await getTrajectories();
+    const data = await getNodeTrajectories(nodeId);
     trajectories.value = data || [];
     if (trajectories.value.length > 0 && !form.trajectory_id) {
       form.trajectory_id = trajectories.value[0].id;
     }
   } catch (err) {
-    console.error("Failed to fetch trajectories:", err);
+    console.error(`Failed to fetch trajectories for node ${nodeId}:`, err);
     trajectories.value = [];
   }
 };
 
 watch(() => props.show, (newVal) => {
-  if (newVal) {
-    fetchTrajectories();
+  if (newVal && props.nodeId) {
+    fetchNodeTrajectories(props.nodeId);
   } else {
     // Reset form state when modal closes
     trajectories.value = [];
