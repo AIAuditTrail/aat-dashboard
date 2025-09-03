@@ -9,17 +9,17 @@
     <template v-else-if="stats">
       <div class="con_div_text left">
         <div class="con_div_text01 left">
-          <img src="/images/info_1.png" class="left text01_img" alt="总低风险警报图标"  />
+          <img src="/images/info_1.png" class="left text01_img" alt="总低风险节点图标"  />
           <div class="left text01_div">
-            <p>总低风险警报数</p>
+            <p>总低风险节点数</p>
             <p>{{ lowRiskTotal }}</p>
           </div>
         </div>
         <div class="con_div_text01 right">
           <img src="/images/info_2.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>当月低风险警报数</p>
-            <p>{{ lowRiskMonth }}</p>
+            <p>今日新增低风险</p>
+            <p>{{ lowRiskToday }}</p>
           </div>
         </div>
       </div>
@@ -27,15 +27,15 @@
         <div class="con_div_text01 left">
           <img src="/images/info_3.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>总中风险警报数</p>
+            <p>总中风险节点数</p>
             <p class="sky">{{ midRiskTotal }}</p>
           </div>
         </div>
         <div class="con_div_text01 right">
           <img src="/images/info_4.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>当月中风险警报数</p>
-            <p class="sky">{{ midRiskMonth }}</p>
+            <p>今日新增中风险</p>
+            <p class="sky">{{ midRiskToday }}</p>
           </div>
         </div>
       </div>
@@ -43,15 +43,15 @@
         <div class="con_div_text01 left">
           <img src="/images/info_5.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>总高风险警报数</p>
+            <p>总高风险节点数</p>
             <p class="org">{{ highRiskTotal }}</p>
           </div>
         </div>
         <div class="con_div_text01 right">
           <img src="/images/info_6.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>当月高风险警报数</p>
-            <p class="org">{{ highRiskMonth }}</p>
+            <p>今日新增高风险</p>
+            <p class="org">{{ highRiskToday }}</p>
           </div>
         </div>
       </div>
@@ -76,14 +76,27 @@ const props = defineProps({
   }
 })
 
-const lowRiskTotal = computed(() => (props.stats?.alerts?.total_by_level['1'] || 0) + (props.stats?.alerts?.total_by_level['2'] || 0))
-const lowRiskMonth = computed(() => (props.stats?.alerts?.month_by_level['1'] || 0) + (props.stats?.alerts?.month_by_level['2'] || 0))
+const LOW_RISK_THRESHOLD = 4; // Levels 1-4
+const MID_RISK_THRESHOLD = 7; // Levels 5-7
 
-const midRiskTotal = computed(() => props.stats?.alerts?.total_by_level['3'] || 0)
-const midRiskMonth = computed(() => props.stats?.alerts?.month_by_level['3'] || 0)
+const sumCountsByLevel = (data, thresholdFn) => {
+  if (!data) return 0;
+  return Object.entries(data).reduce((acc, [level, count]) => {
+    if (thresholdFn(parseInt(level, 10))) {
+      return acc + count;
+    }
+    return acc;
+  }, 0);
+};
 
-const highRiskTotal = computed(() => (props.stats?.alerts?.total_by_level['4'] || 0) + (props.stats?.alerts?.total_by_level['5'] || 0))
-const highRiskMonth = computed(() => (props.stats?.alerts?.month_by_level['4'] || 0) + (props.stats?.alerts?.month_by_level['5'] || 0))
+const lowRiskTotal = computed(() => sumCountsByLevel(props.stats?.node_levels?.by_level, level => level <= LOW_RISK_THRESHOLD));
+const lowRiskToday = computed(() => sumCountsByLevel(props.stats?.alerts?.today_by_level, level => level <= LOW_RISK_THRESHOLD));
+
+const midRiskTotal = computed(() => sumCountsByLevel(props.stats?.node_levels?.by_level, level => level > LOW_RISK_THRESHOLD && level <= MID_RISK_THRESHOLD));
+const midRiskToday = computed(() => sumCountsByLevel(props.stats?.alerts?.today_by_level, level => level > LOW_RISK_THRESHOLD && level <= MID_RISK_THRESHOLD));
+
+const highRiskTotal = computed(() => sumCountsByLevel(props.stats?.node_levels?.by_level, level => level > MID_RISK_THRESHOLD));
+const highRiskToday = computed(() => sumCountsByLevel(props.stats?.alerts?.today_by_level, level => level > MID_RISK_THRESHOLD));
 </script>
 
 <style scoped>

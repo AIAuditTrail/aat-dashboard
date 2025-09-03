@@ -381,71 +381,75 @@ function renderStatic(nodes, links) {
 
 /* ---------- 动画播放 ---------- */
 function playSteps(steps, source_node_id) {
-  if (!steps?.length) {
-    isPlaying.value = false;
-    return;
-  }
-
-  let idx = 0;
-  const apply = (id, color, size = 40) => {
-    const s = nodeState.get(id);
-    if (s) {
-      s.color = color;
-      s.size = size;
-    }
-  };
-  const flush = () => {
-    const data = nodeList.map(n => ({
-      ...n,
-      symbolSize: nodeState.get(n.id)?.size ?? n.symbolSize,
-      itemStyle: {color: nodeState.get(n.id)?.color ?? n.itemStyle?.color}
-    }));
-    chart.value?.setOption({
-      series: [{
-        type: 'graph',
-        layout: 'none',
-        data,
-        links: linkList,
-        roam: true,
-        label: LABEL_STYLE,
-        emphasis: {focus: 'adjacency', label: {position: 'right', show: true}},
-        lineStyle: {color: 'source', curveness: 0.3}
-      }]
-    }, {notMerge: true});
-  };
-
-  clearInterval(animationTimer);
-  isPlaying.value = true;
-
-  animationTimer = setInterval(() => {
-    if (idx >= steps.length) {
-      if (source_node_id) apply(String(source_node_id), COLORS.SOURCE, 50);
-      flush();
-      clearInterval(animationTimer);
-      animationTimer = null;
+  return new Promise((resolve) => {
+    if (!steps?.length) {
       isPlaying.value = false;
+      resolve();
       return;
     }
 
-    const step = steps[idx];
-    const action = String(step.action || '').toLowerCase();
+    let idx = 0;
+    const apply = (id, color, size = 40) => {
+      const s = nodeState.get(id);
+      if (s) {
+        s.color = color;
+        s.size = size;
+      }
+    };
+    const flush = () => {
+      const data = nodeList.map(n => ({
+        ...n,
+        symbolSize: nodeState.get(n.id)?.size ?? n.symbolSize,
+        itemStyle: {color: nodeState.get(n.id)?.color ?? n.itemStyle?.color}
+      }));
+      chart.value?.setOption({
+        series: [{
+          type: 'graph',
+          layout: 'none',
+          data,
+          links: linkList,
+          roam: true,
+          label: LABEL_STYLE,
+          emphasis: {focus: 'adjacency', label: {position: 'right', show: true}},
+          lineStyle: {color: 'source', curveness: 0.3}
+        }]
+      }, {notMerge: true});
+    };
 
-    if (action === 'inspect' || action === 'inspect_node') {
-      if (step.node_id) apply(String(step.node_id), COLORS.YELLOW, 40);
-    } else if (action === 'mark' || action === 'mark_node') {
-      const state = String(step.state || '').toUpperCase();
-      const c = state === 'GREEN' ? COLORS.GREEN : COLORS.RED;
-      if (step.node_id) apply(String(step.node_id), c, 40);
-    } else if (action === 'cutoff' || action === 'cut_off' || action === 'risk_cutoff') {
-      (step.effects?.mark_green ?? step.effects?.markGreen ?? []).forEach(id => apply(String(id), COLORS.GREEN, 40));
-      (step.effects?.mark_red ?? step.effects?.markRed ?? []).forEach(id => apply(String(id), COLORS.RED, 45));
-    } else if (action === 'finalize' || action === 'finish' || action === 'end') {
-      if (step.source_node_id) apply(String(step.source_node_id), COLORS.SOURCE, 50);
-    }
+    clearInterval(animationTimer);
+    isPlaying.value = true;
 
-    flush();
-    idx += 1;
-  }, 800);
+    animationTimer = setInterval(() => {
+      if (idx >= steps.length) {
+        if (source_node_id) apply(String(source_node_id), COLORS.SOURCE, 50);
+        flush();
+        clearInterval(animationTimer);
+        animationTimer = null;
+        isPlaying.value = false;
+        resolve(); // Resolve promise when animation ends
+        return;
+      }
+
+      const step = steps[idx];
+      const action = String(step.action || '').toLowerCase();
+
+      if (action === 'inspect' || action === 'inspect_node') {
+        if (step.node_id) apply(String(step.node_id), COLORS.YELLOW, 40);
+      } else if (action === 'mark' || action === 'mark_node') {
+        const state = String(step.state || '').toUpperCase();
+        const c = state === 'GREEN' ? COLORS.GREEN : COLORS.RED;
+        if (step.node_id) apply(String(step.node_id), c, 40);
+      } else if (action === 'cutoff' || action === 'cut_off' || action === 'risk_cutoff') {
+        (step.effects?.mark_green ?? step.effects?.markGreen ?? []).forEach(id => apply(String(id), COLORS.GREEN, 40));
+        (step.effects?.mark_red ?? step.effects?.markRed ?? []).forEach(id => apply(String(id), COLORS.RED, 45));
+      } else if (action === 'finalize' || action === 'finish' || action === 'end') {
+        if (step.source_node_id) apply(String(step.source_node_id), COLORS.SOURCE, 50);
+      }
+
+      flush();
+      idx += 1;
+    }, 800);
+  });
 }
 
 /* ---------- 点击溯源 ---------- */
@@ -462,7 +466,9 @@ async function startTraceAndAnimation() {
 
     if (renderTrace(res)) {
       await nextTick();
-      playSteps(res.playback_steps || [], res.source_node_id);
+      await playSteps(res.playback_steps || [], res.source_node_id);
+      
+      // Animation is complete. User can now inspect the final graph state.
     }
   } catch (e) {
     console.error(e);

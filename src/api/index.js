@@ -107,3 +107,16 @@ export const applyAudit = (data) => {
 export const resetSeedData = () => {
     return request('/seed/reset', { method: 'POST' });
 };
+
+// 8. Trajectory Node Content API
+export const getNodeOutput = (trajectoryId, nodeId) => {
+    return request(`/trajectories/${trajectoryId}/nodes/${nodeId}/outputs`);
+};
+
+export const updateNodeOutput = (trajectoryId, nodeId, data) => {
+    return request(`/trajectories/${trajectoryId}/nodes/${nodeId}/outputs`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+};

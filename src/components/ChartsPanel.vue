@@ -9,7 +9,7 @@
       <div class="div_any_child">
         <div class="div_any_title">
           <img src="/images/title_1.png"/>
-          运行节点总数：{{ stats.total_nodes || 0 }}
+          运行节点总数：{{ totalNodes }}
         </div>
         <div ref="pieChartRef" class="p_chart"></div>
       </div>
@@ -30,7 +30,7 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
+import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({
@@ -49,47 +49,77 @@ const barChartRef = ref(null)
 
 let pieChart = null
 let barChart = null
+let isLegendListenerAttached = false;
+
+const totalNodes = computed(() => {
+  if (!props.stats || !props.stats.node_levels || !props.stats.node_levels.by_level) return 0;
+  return Object.values(props.stats.node_levels.by_level).reduce((sum, count) => sum + count, 0);
+});
 
 const updateCharts = (statsData) => {
-  if (!statsData || !statsData.node_levels || !pieChartRef.value || !barChartRef.value) return
-  
-  if (!pieChart) {
-    pieChart = echarts.init(pieChartRef.value)
-  }
+  if (!statsData || !statsData.node_levels || !pieChartRef.value || !barChartRef.value) return;
+
+  if (!pieChart) pieChart = echarts.init(pieChartRef.value);
   if (!barChart) {
-    barChart = echarts.init(barChartRef.value)
+    barChart = echarts.init(barChartRef.value);
+    isLegendListenerAttached = false;
+  }
+  
+  if (isLegendListenerAttached) {
+    barChart.off('legendselectchanged');
   }
 
-  const pieData = Object.entries(statsData.node_levels.by_level).map(([level, value]) => ({
-    name: `风险等级 ${level}`,
-    value,
-  }));
+  const { by_level } = statsData.node_levels;
+  const allLevels = Object.keys(by_level).map(Number).sort((a, b) => a - b);
 
-  const barData = Object.values(statsData.node_levels.by_level);
+  const pieData = allLevels.map(level => ({
+    name: `风险等级 ${level}`,
+    value: by_level[level],
+  }));
 
   pieChart.setOption({
     backgroundColor: 'transparent',
     tooltip: { trigger: 'item' },
-    legend: {
-      bottom: '0%',
-      textStyle: { color: '#fff' }
-    },
+    legend: { show: false },
     series: [{
       name: '节点等级',
       type: 'pie',
       radius: '65%',
-      center: ['50%', '50%'],
+      center: ['50%', '45%'],
       data: pieData,
       label: { color: '#fff' }
     }]
-  })
+  }, true);
+
+  const initialXAxisData = allLevels.map(level => `等级 ${level}`);
+  const initialBarSeries = allLevels.map(level => ({
+    name: `等级 ${level}`,
+    type: 'bar',
+    data: initialXAxisData.map(axisLabel => (axisLabel === `等级 ${level}` ? by_level[level] : 0)),
+    itemStyle: { color: getRiskColor(level) }
+  }));
 
   barChart.setOption({
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis' },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: (params) => {
+        const relevantParam = params.find(p => p.value > 0);
+        if (relevantParam) return `${relevantParam.seriesName}<br/>节点数: ${relevantParam.value}`;
+        if (params.length > 0) return `${params[0].axisValue}<br/>节点数: 0`;
+        return '无数据';
+      }
+    },
+    legend: {
+      type: 'scroll',
+      bottom: '2%',
+      textStyle: { color: '#fff' },
+      selectedMode: 'multiple'
+    },
     xAxis: {
       type: 'category',
-      data: ['等级 1', '等级 2', '等级 3', '等级 4', '等级 5'],
+      data: initialXAxisData,
       axisLine: { lineStyle: { color: '#fff' } },
       axisLabel: { color: '#fff' }
     },
@@ -99,15 +129,41 @@ const updateCharts = (statsData) => {
       splitLine: { lineStyle: { color: '#555' } },
       axisLabel: { color: '#fff' }
     },
-    series: [{
-      data: barData,
+    series: initialBarSeries
+  }, true);
+
+  barChart.on('legendselectchanged', (params) => {
+    const { by_level: current_by_level } = props.stats.node_levels;
+    const { selected } = params;
+
+    const selectedLevels = Object.entries(selected)
+      .filter(([, isSelected]) => isSelected)
+      .map(([name]) => parseInt(name.replace('等级 ', ''), 10))
+      .sort((a, b) => a - b);
+
+    const newXAxisData = selectedLevels.map(level => `等级 ${level}`);
+    const newBarSeries = selectedLevels.map(level => ({
+      name: `等级 ${level}`,
       type: 'bar',
-      itemStyle: {
-        color: (params) => ['#25f3e6', '#62f49c', '#f4e562', '#ff9900', '#ff4e4e'][params.dataIndex]
-      }
-    }]
-  })
-}
+      data: newXAxisData.map(axisLabel => (axisLabel === `等级 ${level}` ? current_by_level[level] || 0 : 0)),
+      itemStyle: { color: getRiskColor(level) }
+    }));
+
+    barChart.setOption({
+      xAxis: { data: newXAxisData },
+      series: newBarSeries
+    });
+  });
+  isLegendListenerAttached = true;
+};
+
+const getRiskColor = (level) => {
+  if (level >= 9) return '#b30000'; // Critical
+  if (level >= 7) return '#ff4e4e'; // High
+  if (level >= 5) return '#ff9900'; // Medium-High
+  if (level >= 3) return '#f4e562'; // Medium
+  return '#62f49c'; // Low
+};
 
 const resizeCharts = () => {
   pieChart?.resize()

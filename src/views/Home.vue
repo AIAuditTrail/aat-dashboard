@@ -28,7 +28,7 @@
       </div>
 
       <!-- 节点右侧详情栏 -->
-      <NodeSidebar :node-id="selectedNodeId" :province="selectedProvince" :stats="stats.data" />
+      <NodeSidebar :node-id="selectedNodeId" :province="selectedProvince" :stats="stats.data" @data-updated="fetchData" />
     </div>
 
     <!-- 独立的警报滚动区 -->
@@ -78,6 +78,10 @@ async function fetchStats() {
   }
 }
 
+async function fetchData() {
+  await Promise.all([fetchStats(), fetchNodes()]);
+}
+
 async function fetchNodes() {
   try {
     nodes.loading = true
@@ -100,8 +104,7 @@ function handleProvinceSelected(province) {
 }
 
 onMounted(() => {
-  fetchStats()
-  fetchNodes()
+  fetchData();
 })
 </script>
 

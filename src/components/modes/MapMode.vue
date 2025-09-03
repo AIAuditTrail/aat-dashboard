@@ -29,10 +29,20 @@ const provinceNameMap = {
 
 const processMapData = (provincesData) => {
   if (!provincesData) return [];
-  return provincesData.map(p => ({
-    name: provinceNameMap[p.province] || p.province,
-    value: p.total_nodes || 0
-  }));
+  return provincesData.map(p => {
+    let riskScore = 1; // Default to lowest risk
+    if (p.by_level && p.total_nodes > 0) {
+      const weightedSum = Object.entries(p.by_level).reduce((sum, [level, count]) => {
+        return sum + (parseInt(level, 10) * count);
+      }, 0);
+      riskScore = weightedSum / p.total_nodes;
+    }
+    return {
+      name: provinceNameMap[p.province] || p.province,
+      value: riskScore.toFixed(2),
+      total_nodes: p.total_nodes || 0
+    };
+  });
 }
 
 const updateChart = () => {
@@ -41,12 +51,8 @@ const updateChart = () => {
   if (width === 0 || height === 0) return;
 
   const seriesData = processMapData(props.provinces);
-  const maxValue = Math.max(...seriesData.map(d => d.value), 0);
   
   chartInstance.setOption({
-    visualMap: {
-      max: Math.ceil(maxValue) || 1,
-    },
     series: [{
       data: seriesData
     }]
@@ -77,15 +83,23 @@ onMounted(async () => {
 
       chartInstance.setOption({
         backgroundColor: 'transparent',
-        tooltip: { trigger: 'item', formatter: '{b}<br/>节点总数: {c}' },
+        tooltip: {
+          trigger: 'item',
+          formatter: (params) => {
+            if (params.data && params.value) {
+              return `${params.name}<br/>平均风险: ${params.value}<br/>节点总数: ${params.data.total_nodes}`;
+            }
+            return `${params.name}<br/>暂无数据`;
+          }
+        },
         visualMap: {
-          min: 0, max: 1, left: 'left', bottom: '5%',
+          min: 1, max: 5, left: 'left', bottom: '5%',
           text: ['高', '低'], calculable: true,
           inRange: { color: ['#50a3ba', '#eac736', '#d94e5d'] },
           textStyle: { color: '#fff' }
         },
         series: [{
-          name: '节点总数', type: 'map', map: 'china', roam: true,
+          name: '平均风险', type: 'map', map: 'china', roam: true,
           label: { show: true, color: '#ffffff' },
           itemStyle: { areaColor: '#003366', borderColor: '#0ba3b0' },
           emphasis: { itemStyle: { areaColor: '#2a333d' } },

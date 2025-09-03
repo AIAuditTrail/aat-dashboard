@@ -19,6 +19,7 @@
         <div v-if="displayMode === 'node'" class="actions">
           <button class="action-btn" @click="showReportModal = true">上报风险</button>
           <button class="action-btn" @click="handleShowRiskList">风险列表</button>
+          <button class="action-btn" @click="showContentAuditModal = true">内容审计</button>
           <button class="action-btn" @click="handleSecurityAudit">安全审计</button>
         </div>
       </div>
@@ -58,6 +59,14 @@
       @close="showRiskListModal = false"
     />
 
+    <ContentAuditModal
+      :show="showContentAuditModal"
+      :node-id="props.nodeId"
+      :node-name="node?.name"
+      @close="showContentAuditModal = false"
+      @data-updated="$emit('data-updated')"
+    />
+
     <SecurityAuditModal
       :show="showSecurityAuditModal"
       :node-id="props.nodeId"
@@ -74,6 +83,7 @@ import { getNodeDetails, createAlert, getAlerts } from '@/api'
 import ReportRiskModal from './ReportRiskModal.vue'
 import RiskListModal from './RiskListModal.vue' // Import the new modal
 import SecurityAuditModal from './SecurityAuditModal.vue';
+import ContentAuditModal from './ContentAuditModal.vue';
 import { Vue3Marquee } from 'vue3-marquee'
 
 const props = defineProps({
@@ -81,22 +91,26 @@ const props = defineProps({
   province: Object,
 })
 
+const emit = defineEmits(['data-updated']);
+
 const node = ref(null)
 const loading = ref(false)
 const error = ref(null)
 const showReportModal = ref(false)
 const showRiskListModal = ref(false) // State for the new modal
 const showSecurityAuditModal = ref(false)
+const showContentAuditModal = ref(false)
 const router = useRouter()
 const alerts = ref([])
 let pollingInterval = null
 
 const levelClass = computed(() => {
     if (!node.value) return '';
-    const level = node.value.effective_level;
-    if (level === 5) return 'level-high';
-    if (level === 4) return 'level-medium-high';
-    if (level === 3) return 'level-medium';
+    const totalRisk = (node.value.static_level || 0) + (node.value.runtime_level || 0);
+    if (totalRisk >= 9) return 'level-critical';
+    if (totalRisk >= 7) return 'level-high';
+    if (totalRisk >= 5) return 'level-medium-high';
+    if (totalRisk >= 3) return 'level-medium';
     return 'level-low';
 });
 
@@ -123,18 +137,20 @@ const provinceNameMap = {
 
 const details = computed(() => {
   if (displayMode.value === 'node') {
+    const totalRisk = (node.value.static_level || 0) + (node.value.runtime_level || 0);
     return [
       { label: '名称', value: node.value.name },
-      { label: '风险等级', value: node.value.effective_level, class: `level ${levelClass.value}` },
+      { label: '静态风险', value: node.value.static_level ?? 'N/A' },
+      { label: '动态风险', value: node.value.runtime_level ?? 'N/A' },
+      { label: '总风险等级', value: totalRisk, class: `level ${levelClass.value}` },
       { label: '地理位置', value: node.value.province },
-      { label: '描述', value: `这是节点 ${node.value.name} 的描述`, isDescription: true }
     ]
   }
   if (displayMode.value === 'province') {
     return [
       { label: '省份', value: provinceNameMap[props.province.province] || props.province.province },
       { label: '节点总数', value: props.province.total_nodes },
-      { label: '高危节点', value: props.province.high_risk_nodes },
+      { label: '高危节点', value: props.province.high_risk_nodes_count },
       { label: '已解决警报', value: props.province.resolved_alerts_count }
     ]
   }
@@ -223,7 +239,13 @@ onBeforeUnmount(() => {
   flex-direction: column;
   height: 100%;
 }
-.detail-section, .alert-section {
+.detail-section {
+  flex: 2; /* Give more space to details */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.alert-section {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -245,17 +267,18 @@ onBeforeUnmount(() => {
 .label { color: #aaa; flex-shrink: 0; margin-right: 10px; }
 .value { font-weight: bold; text-align: right; }
 .level { padding: 2px 6px; border-radius: 4px; color: #fff; }
-.level-high { background-color: #ff4e4e; }
-.level-medium-high { background-color: #ff9900; }
-.level-medium { background-color: #f4e562; color: #333; }
-.level-low { background-color: #62f49c; color: #333; }
+.level-critical { background-color: #b30000; } /* 9-10 */
+.level-high { background-color: #ff4e4e; } /* 7-8 */
+.level-medium-high { background-color: #ff9900; } /* 5-6 */
+.level-medium { background-color: #f4e562; color: #333; } /* 3-4 */
+.level-low { background-color: #62f49c; color: #333; } /* 1-2 */
 .actions { 
   margin-top: 20px; 
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 .action-btn { 
-  flex: 1;
   width: 100%; 
   padding: 10px; 
   background-color: #2f4f75; 

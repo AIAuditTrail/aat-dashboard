@@ -18,12 +18,12 @@
         <tr
           v-for="node in sortedNodes"
           :key="node.id"
-          :class="['node-row', getRowClass(node.effective_level)]"
+          :class="['node-row', getRowClass(node)]"
           @click="onNodeSelect(node)"
         >
           <td>{{ node.name }}</td>
           <td>
-            <span class="level-indicator">{{ node.effective_level }}</span>
+            <span class="level-indicator">{{ (node.static_level || 0) + (node.runtime_level || 0) }}</span>
           </td>
           <td>{{ node.province }}</td>
         </tr>
@@ -54,15 +54,19 @@ const emit = defineEmits(['node-selected'])
 
 const sortedNodes = computed(() => {
   return [...props.nodes].sort((a, b) => {
-    return b.effective_level - a.effective_level || a.name.localeCompare(b.name)
-  })
-})
+    const riskA = (a.static_level || 0) + (a.runtime_level || 0);
+    const riskB = (b.static_level || 0) + (b.runtime_level || 0);
+    return riskB - riskA || a.name.localeCompare(b.name);
+  });
+});
 
-const getRowClass = (level) => {
-  if (level === 5) return 'level-high'
-  if (level === 4) return 'level-medium-high'
-  if (level === 3) return 'level-medium'
-  return 'level-low'
+const getRowClass = (node) => {
+  const totalRisk = (node.static_level || 0) + (node.runtime_level || 0);
+  if (totalRisk >= 9) return 'level-critical';
+  if (totalRisk >= 7) return 'level-high';
+  if (totalRisk >= 5) return 'level-medium-high';
+  if (totalRisk >= 3) return 'level-medium';
+  return 'level-low';
 }
 
 const onNodeSelect = (node) => {
@@ -104,10 +108,11 @@ const onNodeSelect = (node) => {
 .level-indicator {
   font-weight: bold;
 }
-.level-high { border-left: 4px solid #ff4e4e; }
-.level-medium-high { border-left: 4px solid #ff9900; }
-.level-medium { border-left: 4px solid #f4e562; }
-.level-low { border-left: 4px solid #62f49c; }
+.level-critical { border-left: 4px solid #b30000; } /* 9-10 */
+.level-high { border-left: 4px solid #ff4e4e; } /* 7-8 */
+.level-medium-high { border-left: 4px solid #ff9900; } /* 5-6 */
+.level-medium { border-left: 4px solid #f4e562; } /* 3-4 */
+.level-low { border-left: 4px solid #62f49c; } /* 1-2 */
 
 .loading-skeleton { padding: 10px; }
 .skeleton-row {
