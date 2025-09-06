@@ -59,6 +59,18 @@ export const getTrajectories = () => {
     return request('/trajectories');
 };
 
+export const getTrajectoryGraph = (id) => {
+    return request(`/trajectories/${id}/graph`);
+};
+
+export const injectRiskToTrajectory = (id) => {
+    return request(`/trajectories/${id}/inject-risk`, { method: 'POST' });
+};
+
+export const auditTrajectory = (id) => {
+    return request(`/trajectories/${id}/audit`, { method: 'POST' });
+};
+
 export const getTrajectoryTransactions = (id) => {
     return request(`/trajectories/${id}/transactions`);
 };

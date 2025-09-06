@@ -4,28 +4,26 @@
       <div v-for="i in 10" :key="i" class="skeleton-row"></div>
     </div>
     <div v-else-if="error" class="error-message">
-      Failed to load node list...
+      Failed to load trajectory list...
     </div>
     <table v-else class="nodes-table">
       <thead>
         <tr>
-          <th>Node Name</th>
-          <th>Risk</th>
-          <th>Location</th>
+          <th>Trajectory Title</th>
+          <th>Created At</th>
+          <th>Transaction Count</th>
         </tr>
       </thead>
       <tbody>
         <tr
-          v-for="node in sortedNodes"
-          :key="node.id"
-          :class="['node-row', getRowClass(node)]"
-          @click="onNodeSelect(node)"
+          v-for="trajectory in trajectories"
+          :key="trajectory.id"
+          class="node-row"
+          @click="onTrajectorySelect(trajectory)"
         >
-          <td>{{ node.name }}</td>
-          <td>
-            <span class="level-indicator">{{ node.runtime_level || 0 }}</span>
-          </td>
-          <td>{{ node.province }}</td>
+          <td>{{ trajectory.title }}</td>
+          <td>{{ new Date(trajectory.created_at).toLocaleString() }}</td>
+          <td>{{ trajectory.transaction_count }}</td>
         </tr>
       </tbody>
     </table>
@@ -33,10 +31,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+const emit = defineEmits(['trajectory-selected'])
 
-const props = defineProps({
-  nodes: {
+defineProps({
+  trajectories: {
     type: Array,
     default: () => []
   },
@@ -50,24 +48,8 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['node-selected'])
-
-const sortedNodes = computed(() => {
-  return [...props.nodes].sort((a, b) => {
-    const riskA = a.runtime_level || 0;
-    const riskB = b.runtime_level || 0;
-    return riskB - riskA || a.name.localeCompare(b.name);
-  });
-});
-
-const getRowClass = (node) => {
-  const risk = node.runtime_level || 0;
-  if (risk > 0 && risk <= 5) return `level-${risk}`;
-  return '';
-}
-
-const onNodeSelect = (node) => {
-  emit('node-selected', node.id)
+const onTrajectorySelect = (trajectory) => {
+  emit('trajectory-selected', trajectory)
 }
 </script>
 
@@ -102,15 +84,6 @@ const onNodeSelect = (node) => {
 .node-row:hover {
   background-color: #2a3a4a;
 }
-.level-indicator {
-  font-weight: bold;
-}
-.level-1 { border-left: 4px solid #62f49c; }
-.level-2 { border-left: 4px solid #f4e562; }
-.level-3 { border-left: 4px solid #ff9900; }
-.level-4 { border-left: 4px solid #ff4e4e; }
-.level-5 { border-left: 4px solid #b30000; }
-
 .loading-skeleton { padding: 10px; }
 .skeleton-row {
   height: 45px;

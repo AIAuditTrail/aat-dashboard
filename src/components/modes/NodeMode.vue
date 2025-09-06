@@ -30,13 +30,20 @@ let chartInstance = null
 
 const emit = defineEmits(['node-selected'])
 
-const riskLevelColors = {
-  1: '#62f49c', 2: '#25f3e6', 3: '#f4e562', 4: '#ff9900', 5: '#ff4e4e',
+const getRiskColor = (level) => {
+  const colors = {
+    1: '#62f49c',    // Low
+    2: '#f4e562',    // Medium
+    3: '#ff9900',    // Medium-High
+    4: '#ff4e4e',    // High
+    5: '#b30000',    // Critical
+  };
+  return colors[level] || '#ccc'; // Default
 };
 
 const sortedNodes = computed(() => {
   return [...props.nodes].sort((a, b) => {
-    return b.effective_level - a.effective_level || a.name.localeCompare(b.name)
+    return (b.runtime_level || 0) - (a.runtime_level || 0) || a.name.localeCompare(b.name)
   })
 })
 
@@ -49,10 +56,10 @@ const updateChart = () => {
   const chartData = sortedNodes.value.map((node) => ({
     id: node.id,
     name: node.name,
-    value: node.effective_level,
-    symbolSize: 30 + node.effective_level * 5,
+    value: node.runtime_level || 0,
+    symbolSize: 30 + (node.runtime_level || 0) * 5,
     itemStyle: {
-      color: riskLevelColors[node.effective_level] || '#ccc',
+      color: getRiskColor(node.runtime_level) || '#ccc',
     },
   }));
   

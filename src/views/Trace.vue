@@ -1,45 +1,45 @@
 <template>
   <div class="trace-container">
     <div class="navbar">
-      <router-link to="/" class="nav-link">返回首页</router-link>
-      <h1 class="page-title">风险溯源</h1>
+      <router-link to="/" class="nav-link">Back to Home</router-link>
+      <h1 class="page-title">Risk Tracing</h1>
     </div>
 
-    <div v-if="loading" class="status-message">正在加载溯源数据...</div>
+    <div v-if="loading" class="status-message">Loading trace data...</div>
     <div v-else-if="error" class="status-message error">
-      加载失败: {{ error.message || error }}
+      Failed to load: {{ error.message || error }}
     </div>
 
     <div v-else-if="alertDetails" class="trace-content-grid">
       <!-- Left Panel -->
       <div class="left-panel">
         <div class="panel summary-panel">
-          <h3>溯源摘要</h3>
+          <h3>Trace Summary</h3>
           <p class="summary-description">{{ alertDetails.description }}</p>
         </div>
 
         <div class="panel alert-details-panel">
-          <h3>风险详情</h3>
+          <h3>Risk Details</h3>
           <div class="details-content">
             <div class="detail-grid">
-              <div><strong>节点名称:</strong> <span>{{ alertDetails.node?.name }}</span></div>
-              <div><strong>风险等级:</strong> <span :class="`level-${alertDetails.level}`">{{
+              <div><strong>Node Name:</strong> <span>{{ alertDetails.node?.name }}</span></div>
+              <div><strong>Risk Level:</strong> <span :class="`level-${alertDetails.level}`">{{
                   alertDetails.level
                 }}</span></div>
-              <div><strong>状态:</strong> <span>{{ alertDetails.status }}</span></div>
-              <div><strong>时间:</strong> <span>{{ new Date(alertDetails.created_at).toLocaleString() }}</span></div>
+              <div><strong>Status:</strong> <span>{{ alertDetails.status }}</span></div>
+              <div><strong>Time:</strong> <span>{{ new Date(alertDetails.created_at).toLocaleString() }}</span></div>
               <div class="full-width-detail">
-                <strong>上报节点信息:</strong>
-                <p>位于 {{ alertDetails.node?.province }} 的 {{ alertDetails.node?.name }} 节点上报了此风险。</p>
+                <strong>Reporting Node Info:</strong>
+                <p>This risk was reported by the {{ alertDetails.node?.name }} node, located in {{ alertDetails.node?.province }}.</p>
               </div>
             </div>
           </div>
 
           <div class="panel-actions">
             <button @click="startTraceAndAnimation" :disabled="isPlaying || !isChartReady">
-              {{ isPlaying ? '溯源中...' : '风险溯源' }}
+              {{ isPlaying ? 'Tracing...' : 'Start Risk Trace' }}
             </button>
-            <button @click="resetAnimation" :disabled="!isChartReady">重置动画</button>
+            <button @click="resetAnimation" :disabled="!isChartReady">Reset Animation</button>
           </div>
         </div>
       </div>
@@ -55,7 +55,7 @@
       <div class="modal-content" @click.stop>
         <h3 v-if="selectedNodeDetails">{{ selectedNodeDetails.name }}</h3>
         <h3 v-else>Loading...</h3>
-        <div v-if="isNodeDetailLoading" class="status-message">正在加载节点详情...</div>
+        <div v-if="isNodeDetailLoading" class="status-message">Loading node details...</div>
         <div v-else-if="selectedNodeDetails" class="details-content">
           <div class="detail-grid">
             <div><strong>ID:</strong> <span>{{ selectedNodeDetails.id }}</span></div>
@@ -89,7 +89,7 @@ import {TitleComponent, TooltipComponent, LegendComponent} from 'echarts/compone
 
 echarts.use([GraphChart, CanvasRenderer, TitleComponent, TooltipComponent, LegendComponent]);
 
-/* ---------- 基础状态 ---------- */
+/* ---------- Basic State ---------- */
 const route = useRoute();
 const alertId = ref(String(route.params.alert_id || ''));
 const traceRunId = ref(String(route.query.trace_run_id || ''));
@@ -113,7 +113,7 @@ const selectedNodeDetails = ref(null);
 const isNodeDetailVisible = ref(false);
 const isNodeDetailLoading = ref(false);
 
-// 运行时快照
+// Runtime Snapshot
 let nodeList = [];   // echarts data
 let linkList = [];   // echarts links
 let nodeState = new Map(); // id -> {color, size}
@@ -151,39 +151,39 @@ async function handleNodeClick(params) {
   }
 }
 
-/* ---------- 数据加载 ---------- */
+/* ---------- Data Loading ---------- */
 async function loadInitialData() {
   try {
     loading.value = true;
 
-    // 优先通过 trace_run_id 加载历史记录
+    // Prioritize loading history via trace_run_id
     if (traceRunId.value) {
       const res = await getTraceRun(traceRunId.value);
-      if (!res) throw new Error('未能获取指定的溯源记录');
+      if (!res) throw new Error('Could not fetch the specified trace record');
       traceData.value = res;
 
-      // 历史记录中可能没有完整的 alert 详情，需要单独补一次
+      // History may not contain full alert details, so fetch them separately
       if (res.alert_id) {
         alertDetails.value = await getAlertDetails(res.alert_id);
       } else {
-        // 如果连 alert_id 都没有，就构造一个最小化的详情
+        // Construct minimal details if even alert_id is missing
         alertDetails.value = {
-          description: `回放溯源记录 ${traceRunId.value}`,
+          description: `Replaying trace record ${traceRunId.value}`,
           node: {},
         };
       }
-      return; // 直接返回，等待自动播放
+      return; // Return directly, wait for auto-play
     }
 
-    // 否则，通过 alert_id 加载基础信息
+    // Otherwise, load basic info via alert_id
     if (alertId.value) {
       const res = await getAlertDetails(alertId.value);
-      if (!res) throw new Error('未能获取警报详情');
+      if (!res) throw new Error('Could not fetch alert details');
       alertDetails.value = res;
       return;
     }
 
-    throw new Error('缺少 alert_id 或 trace_run_id');
+    throw new Error('Missing alert_id or trace_run_id');
 
   } catch (e) {
     error.value = e;
@@ -193,7 +193,7 @@ async function loadInitialData() {
 }
 
 
-/* ---------- 解析 layout_matrix (v1.5.0+) ---------- */
+/* ---------- Parse layout_matrix (v1.5.0+) ---------- */
 function parseLayoutMatrix(layout_matrix = {}) {
     const nodes = [];
     if (!layout_matrix?.rows?.length) {
@@ -268,7 +268,7 @@ function parseLayoutMatrix(layout_matrix = {}) {
     return { nodes };
 }
 
-/* ---------- 从 steps 提取连线 ---------- */
+/* ---------- Extract Links from Steps ---------- */
 function linksFromSteps(steps = []) {
   const set = new Set();
   const links = [];
@@ -285,24 +285,24 @@ function linksFromSteps(steps = []) {
   return links;
 }
 
-/* ---------- 核心：渲染溯源数据 ---------- */
+/* ---------- Core: Render Trace Data ---------- */
 function renderTrace(data) {
   if (!data) return false;
 
-  // 根据新文档，直接从 layout_matrix 和根级的 edges 字段解析
+  // According to the new documentation, parse directly from layout_matrix and root-level edges field
   const { nodes } = parseLayoutMatrix(data.layout_matrix || {});
 
-  // 新版 API 优先使用根级的 `edges` 字段，并转换 key
+  // The new API prioritizes using the root-level `edges` field and converts keys
   let links;
   if (data.edges && data.edges.length > 0) {
     links = data.edges.map(e => ({ source: String(e.from), target: String(e.to) }));
   } else {
-    // 为兼容旧数据或无边数据的情况保留
+    // Retained for compatibility with old data or data without edges
     links = linksFromSteps(data.playback_steps || []);
   }
   
   if (!nodes || nodes.length === 0) {
-    const errorMsg = "错误：无法从溯源数据中解析出有效的节点布局。";
+    const errorMsg = "Error: Could not parse valid node layout from trace data.";
     console.error(errorMsg, "Received layout_matrix:", data.layout_matrix);
     alert(errorMsg);
     return false;
@@ -312,7 +312,7 @@ function renderTrace(data) {
   return true;
 }
 
-/* ---------- 初始化图表 ---------- */
+/* ---------- Initialize Chart ---------- */
 async function initChart() {
   if (!chartRef.value) return;
   if (chart.value) chart.value.dispose();
@@ -320,7 +320,7 @@ async function initChart() {
   chart.value = echarts.init(chartRef.value);
   chart.value.on('click', handleNodeClick);
   chart.value.setOption({
-    title: {text: '风险传播路径', left: 'center', top: 'top', textStyle: {color: '#fff'}},
+    title: {text: 'Risk Propagation Path', left: 'center', top: 'top', textStyle: {color: '#fff'}},
     tooltip: {},
     series: [{
       type: 'graph',
@@ -334,7 +334,7 @@ async function initChart() {
     }]
   });
 
-  // 初始单点兜底：进入页面就看到上报节点
+  // Initial single-point fallback: see the reporting node upon entering the page
   if (alertDetails.value) {
     const n = alertDetails.value.node || {};
     const singleId = alertDetails.value.node_id ?? n.id ?? alertDetails.value?.id ?? n?.node_id;
@@ -351,7 +351,7 @@ async function initChart() {
   if (chartRef.value) resizeObserver.observe(chartRef.value);
 }
 
-/* ---------- 渲染静态图 ---------- */
+/* ---------- Render Static Graph ---------- */
 function renderStatic(nodes, links) {
   nodeList = nodes.map(n => ({
     id: n.id, name: n.name, x: n.x, y: n.y,
@@ -379,7 +379,7 @@ function renderStatic(nodes, links) {
   }, {notMerge: true, lazyUpdate: false});
 }
 
-/* ---------- 动画播放 ---------- */
+/* ---------- Animation Playback ---------- */
 function playSteps(steps, source_node_id) {
   return new Promise((resolve) => {
     if (!steps?.length) {
@@ -452,7 +452,7 @@ function playSteps(steps, source_node_id) {
   });
 }
 
-/* ---------- 点击溯源 ---------- */
+/* ---------- Click to Trace ---------- */
 async function startTraceAndAnimation() {
   if (isPlaying.value) return;
   try {
@@ -461,7 +461,7 @@ async function startTraceAndAnimation() {
     chart.value?.setOption({ series: [{ type: 'graph', data: [], links: [] }] }, { notMerge: true });
     
     const res = await runTrace({ alert_id: String(alertId.value) });
-    if (!res) throw new Error('溯源接口无返回');
+    if (!res) throw new Error('Trace API returned no response');
     traceData.value = res;
 
     if (renderTrace(res)) {
@@ -478,7 +478,7 @@ async function startTraceAndAnimation() {
   }
 }
 
-/* ---------- 重置 ---------- */
+/* ---------- Reset ---------- */
 function resetAnimation() {
   clearInterval(animationTimer);
   animationTimer = null;
@@ -493,7 +493,7 @@ function resetAnimation() {
   }
 }
 
-/* ---------- 生命周期 ---------- */
+/* ---------- Lifecycle ---------- */
 onMounted(async () => {
   await loadInitialData();
   await nextTick();

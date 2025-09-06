@@ -6,19 +6,19 @@
         <div class="con_div_text01 right"><div class="skeleton-item"></div></div>
       </div>
     </div>
-    <template v-else-if="stats">
+    <template v-else-if="nodes">
       <div class="con_div_text left">
         <div class="con_div_text01 left">
-          <img src="/images/info_1.png" class="left text01_img" alt="总低风险节点图标"  />
+          <img src="/images/info_1.png" class="left text01_img" alt="Total Low-Risk Nodes"  />
           <div class="left text01_div">
-            <p>总低风险节点数</p>
+            <p>Total Low-Risk Nodes</p>
             <p>{{ lowRiskTotal }}</p>
           </div>
         </div>
         <div class="con_div_text01 right">
           <img src="/images/info_2.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>今日新增低风险</p>
+            <p>New Low-Risk Alerts Today</p>
             <p>{{ lowRiskToday }}</p>
           </div>
         </div>
@@ -27,14 +27,14 @@
         <div class="con_div_text01 left">
           <img src="/images/info_3.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>总中风险节点数</p>
+            <p>Total Mid-Risk Nodes</p>
             <p class="sky">{{ midRiskTotal }}</p>
           </div>
         </div>
         <div class="con_div_text01 right">
           <img src="/images/info_4.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>今日新增中风险</p>
+            <p>New Mid-Risk Alerts Today</p>
             <p class="sky">{{ midRiskToday }}</p>
           </div>
         </div>
@@ -43,21 +43,21 @@
         <div class="con_div_text01 left">
           <img src="/images/info_5.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>总高风险节点数</p>
+            <p>Total High-Risk Nodes</p>
             <p class="org">{{ highRiskTotal }}</p>
           </div>
         </div>
         <div class="con_div_text01 right">
           <img src="/images/info_6.png" class="left text01_img" />
           <div class="left text01_div">
-            <p>今日新增高风险</p>
+            <p>New High-Risk Alerts Today</p>
             <p class="org">{{ highRiskToday }}</p>
           </div>
         </div>
       </div>
     </template>
     <div v-else class="error-message">
-      数据加载失败...
+      Failed to load data...
     </div>
   </div>
 </template>
@@ -66,9 +66,13 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-  stats: {
-    type: Object,
-    default: () => null
+  nodes: {
+    type: Array,
+    default: () => []
+  },
+  alerts: {
+    type: Array,
+    default: () => []
   },
   loading: {
     type: Boolean,
@@ -76,31 +80,33 @@ const props = defineProps({
   }
 })
 
-const LOW_RISK_THRESHOLD = 4; // Levels 1-4
-const MID_RISK_THRESHOLD = 7; // Levels 5-7
+const LOW_RISK_THRESHOLD = 2; // Levels 1-2
+const MID_RISK_THRESHOLD = 3; // Level 3
 
-const sumCountsByLevel = (data, thresholdFn) => {
-  if (!data) return 0;
-  return Object.entries(data).reduce((acc, [level, count]) => {
-    if (thresholdFn(parseInt(level, 10))) {
-      return acc + count;
-    }
-    return acc;
-  }, 0);
-};
+const getNodesByRisk = (riskFn) => {
+  if (!props.nodes) return 0;
+  return props.nodes.filter(node => riskFn(node.runtime_level || 0)).length;
+}
 
-const lowRiskTotal = computed(() => sumCountsByLevel(props.stats?.node_levels?.by_level, level => level <= LOW_RISK_THRESHOLD));
-const lowRiskToday = computed(() => sumCountsByLevel(props.stats?.alerts?.today_by_level, level => level <= LOW_RISK_THRESHOLD));
+const getAlertsByRisk = (riskFn) => {
+  if (!props.alerts) return 0;
+  // Assuming alert level is consistent with node runtime_level
+  return props.alerts.filter(alert => riskFn(alert.level || 0)).length;
+}
 
-const midRiskTotal = computed(() => sumCountsByLevel(props.stats?.node_levels?.by_level, level => level > LOW_RISK_THRESHOLD && level <= MID_RISK_THRESHOLD));
-const midRiskToday = computed(() => sumCountsByLevel(props.stats?.alerts?.today_by_level, level => level > LOW_RISK_THRESHOLD && level <= MID_RISK_THRESHOLD));
+const lowRiskTotal = computed(() => getNodesByRisk(level => level > 0 && level <= LOW_RISK_THRESHOLD));
+const midRiskTotal = computed(() => getNodesByRisk(level => level === MID_RISK_THRESHOLD));
+const highRiskTotal = computed(() => getNodesByRisk(level => level > MID_RISK_THRESHOLD));
 
-const highRiskTotal = computed(() => sumCountsByLevel(props.stats?.node_levels?.by_level, level => level > MID_RISK_THRESHOLD));
-const highRiskToday = computed(() => sumCountsByLevel(props.stats?.alerts?.today_by_level, level => level > MID_RISK_THRESHOLD));
+// Assuming we only want to count today's alerts. Since we don't have that info directly,
+// we will count all unresolved alerts as "today's alerts" for now.
+const lowRiskToday = computed(() => getAlertsByRisk(level => level > 0 && level <= LOW_RISK_THRESHOLD));
+const midRiskToday = computed(() => getAlertsByRisk(level => level === MID_RISK_THRESHOLD));
+const highRiskToday = computed(() => getAlertsByRisk(level => level > MID_RISK_THRESHOLD));
 </script>
 
 <style scoped>
-/* 样式由 common.css 提供，无需重复写 */
+/* Styles are provided by common.css, no need to duplicate */
 .loading-skeleton {
   width: 100%;
   display: flex;

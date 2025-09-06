@@ -1,12 +1,12 @@
 <template>
   <div class="div_any01 sidebar-container">
-    <!-- 详情区域 -->
+    <!-- Details Section -->
     <div class="div_any_child detail-section">
       <div class="div_any_title">{{ title }}</div>
       <div v-if="loading" class="sidebar-content">
         <div class="loading-skeleton"></div>
       </div>
-      <div v-else-if="error" class="sidebar-content error-message">加载失败...</div>
+      <div v-else-if="error" class="sidebar-content error-message">Failed to load...</div>
       
       <div v-else-if="displayMode !== 'none'" class="sidebar-content details-grid">
         <template v-for="detail in details" :key="detail.label">
@@ -17,21 +17,24 @@
         </template>
         
         <div v-if="displayMode === 'node'" class="actions">
-          <button class="action-btn" @click="showReportModal = true">上报风险</button>
-          <button class="action-btn" @click="handleShowRiskList">风险列表</button>
-          <button class="action-btn" @click="showContentAuditModal = true">内容审计</button>
-          <button class="action-btn" @click="handleSecurityAudit">安全审计</button>
+          <button class="action-btn" @click="showReportModal = true">Report Risk</button>
+          <button class="action-btn" @click="handleShowRiskList">Risk List</button>
+          <button class="action-btn" @click="showContentAuditModal = true">Content Audit</button>
+          <button class="action-btn" @click="handleSecurityAudit">Security Audit</button>
+        </div>
+        <div v-if="displayMode === 'trajectory'" class="actions">
+          <button class="action-btn" @click="$emit('view-trajectory-graph', props.trajectory)">View Topology</button>
         </div>
       </div>
       
       <div v-else class="sidebar-content placeholder">
-        <p>请在左侧选择一个节点或省份以查看详细信息。</p>
+        <p>Select a node, province, or trajectory to see details.</p>
       </div>
     </div>
 
-    <!-- 实时警报 -->
+    <!-- Real-time Alerts -->
     <div class="div_any_child alert-section">
-      <div class="div_any_title">实时警报</div>
+      <div class="div_any_title">Real-time Alerts</div>
       <div class="alert-container">
         <Vue3Marquee v-if="alerts.length > 0" :vertical="true" :clone="true" :duration="20">
           <div v-for="(alert, index) in alerts" :key="index" class="alert-line" :class="getAlertClass(alert)">
@@ -39,7 +42,7 @@
           </div>
         </Vue3Marquee>
         <div v-else class="sidebar-content placeholder">
-            <p>暂无实时警报。</p>
+            <p>No real-time alerts.</p>
         </div>
       </div>
     </div>
@@ -89,9 +92,10 @@ import { Vue3Marquee } from 'vue3-marquee'
 const props = defineProps({
   nodeId: String,
   province: Object,
+  trajectory: Object,
 })
 
-const emit = defineEmits(['data-updated']);
+const emit = defineEmits(['data-updated', 'view-trajectory-graph']);
 
 const node = ref(null)
 const loading = ref(false)
@@ -106,64 +110,69 @@ let pollingInterval = null
 
 const levelClass = computed(() => {
     if (!node.value) return '';
-    const totalRisk = (node.value.static_level || 0) + (node.value.runtime_level || 0);
-    if (totalRisk >= 9) return 'level-critical';
-    if (totalRisk >= 7) return 'level-high';
-    if (totalRisk >= 5) return 'level-medium-high';
-    if (totalRisk >= 3) return 'level-medium';
-    return 'level-low';
+    const risk = node.value.runtime_level || 0;
+    if (risk > 0 && risk <= 5) return `level-${risk}`;
+    return '';
 });
 
 const displayMode = computed(() => {
   if (props.nodeId && node.value) return 'node';
   if (props.province) return 'province';
+  if (props.trajectory) return 'trajectory';
   return 'none';
 })
 
 const title = computed(() => {
-  if (displayMode.value === 'node') return '节点详情'
-  if (displayMode.value === 'province') return '省份详情'
-  return '详情'
+  if (displayMode.value === 'node') return 'Node Details'
+  if (displayMode.value === 'province') return 'Province Details'
+  if (displayMode.value === 'trajectory') return 'Trajectory Details'
+  return 'Details'
 })
 
 const provinceNameMap = {
-    'Anhui': '安徽', 'Beijing': '北京', 'Chongqing': '重庆', 'Fujian': '福建', 'Gansu': '甘肃',
-    'Guangdong': '广东', 'Guangxi': '广西', 'Guizhou': '贵州', 'Hainan': '海南', 'Hebei': '河北',
-    'Heilongjiang': '黑龙江', 'Henan': '河南', 'Hubei': '湖北', 'Hunan': '湖南', 'Inner Mongolia': '内蒙古',
-    'Jiangsu': '江苏', 'Jiangxi': '江西', 'Jilin': '吉林', 'Liaoning': '辽宁', 'Ningxia': '宁夏',
-    'Qinghai': '青海', 'Shaanxi': '陕西', 'Shandong': '山东', 'Shanghai': '上海', 'Shanxi': '山西',
-    'Sichuan': '四川', 'Tianjin': '天津', 'Tibet': '西藏', 'Xinjiang': '新疆', 'Yunnan': '云南', 'Zhejiang': '浙江'
+    'Anhui': 'Anhui', 'Beijing': 'Beijing', 'Chongqing': 'Chongqing', 'Fujian': 'Fujian', 'Gansu': 'Gansu',
+    'Guangdong': 'Guangdong', 'Guangxi': 'Guangxi', 'Guizhou': 'Guizhou', 'Hainan': 'Hainan', 'Hebei': 'Hebei',
+    'Heilongjiang': 'Heilongjiang', 'Henan': 'Henan', 'Hubei': 'Hubei', 'Hunan': 'Hunan', 'Inner Mongolia': 'Inner Mongolia',
+    'Jiangsu': 'Jiangsu', 'Jiangxi': 'Jiangxi', 'Jilin': 'Jilin', 'Liaoning': 'Liaoning', 'Ningxia': 'Ningxia',
+    'Qinghai': 'Qinghai', 'Shaanxi': 'Shaanxi', 'Shandong': 'Shandong', 'Shanghai': 'Shanghai', 'Shanxi': 'Shanxi',
+    'Sichuan': 'Sichuan', 'Tianjin': 'Tianjin', 'Tibet': 'Tibet', 'Xinjiang': 'Xinjiang', 'Yunnan': 'Yunnan', 'Zhejiang': 'Zhejiang'
 };
 
 const details = computed(() => {
   if (displayMode.value === 'node') {
-    const totalRisk = (node.value.static_level || 0) + (node.value.runtime_level || 0);
+    const risk = node.value.runtime_level || 0;
     return [
-      { label: '名称', value: node.value.name },
-      { label: '静态风险', value: node.value.static_level ?? 'N/A' },
-      { label: '动态风险', value: node.value.runtime_level ?? 'N/A' },
-      { label: '总风险等级', value: totalRisk, class: `level ${levelClass.value}` },
-      { label: '地理位置', value: node.value.province },
+      { label: 'Name', value: node.value.name },
+      { label: 'Risk', value: risk, class: `level ${levelClass.value}` },
+      { label: 'Location', value: node.value.province },
     ]
   }
   if (displayMode.value === 'province') {
     return [
-      { label: '省份', value: provinceNameMap[props.province.province] || props.province.province },
-      { label: '节点总数', value: props.province.total_nodes },
-      { label: '高危节点', value: props.province.high_risk_nodes_count },
-      { label: '已解决警报', value: props.province.resolved_alerts_count }
+      { label: 'Province', value: provinceNameMap[props.province.province] || props.province.province },
+      { label: 'Total Nodes', value: props.province.total_nodes },
+      { label: 'High-Risk Nodes', value: props.province.high_risk_nodes_count },
+      { label: 'Resolved Alerts', value: props.province.resolved_alerts_count }
+    ]
+  }
+  if (displayMode.value === 'trajectory') {
+    return [
+      { label: 'ID', value: props.trajectory.id },
+      { label: 'Title', value: props.trajectory.title },
+      { label: 'Transaction Count', value: props.trajectory.transaction_count },
+      { label: 'Created At', value: new Date(props.trajectory.created_at).toLocaleString() },
     ]
   }
   return []
 })
 
-const levelTextMap = { 5: '高危', 4: '较高', 3: '中危', 2: '较低', 1: '低危' }
+const levelTextMap = { 5: 'High', 4: 'Medium-High', 3: 'Medium', 2: 'Low', 1: 'Very Low' }
 
 const formatAlertMessage = (alert) => {
-  const levelText = levelTextMap[alert.level] || '未知';
-  const time = new Date(alert.created_at).toLocaleTimeString('it-IT');
-  const nodeName = alert.node?.name || '未知节点';
-  return `【${levelText}】节点 ${nodeName} 在 ${time} 检测到异常`;
+  const levelText = levelTextMap[alert.level] || 'Unknown';
+  const time = new Date(alert.created_at).toLocaleTimeString('en-US', { hour12: false });
+  const nodeName = alert.node?.name || 'Unknown Node';
+  return `[${levelText}] Anomaly detected at node ${nodeName} at ${time}`;
 }
 
 const getAlertClass = (alert) => {
@@ -212,12 +221,12 @@ const handleReportSubmit = async (payload) => {
   try {
     const response = await createAlert(payload);
     showReportModal.value = false;
-    if(confirm(`风险上报成功! Alert ID: ${response.alert_id}\n\n是否立即跳转到溯源页面?`)) {
+    if(confirm(`Risk reported successfully! Alert ID: ${response.alert_id}\n\nProceed to trace page now?`)) {
       router.push({ name: 'Trace', params: { alert_id: response.alert_id } });
     }
     await fetchAlerts();
   } catch (err) {
-    alert('风险上报失败!');
+    alert('Failed to report risk!');
   }
 }
 
@@ -267,11 +276,11 @@ onBeforeUnmount(() => {
 .label { color: #aaa; flex-shrink: 0; margin-right: 10px; }
 .value { font-weight: bold; text-align: right; }
 .level { padding: 2px 6px; border-radius: 4px; color: #fff; }
-.level-critical { background-color: #b30000; } /* 9-10 */
-.level-high { background-color: #ff4e4e; } /* 7-8 */
-.level-medium-high { background-color: #ff9900; } /* 5-6 */
-.level-medium { background-color: #f4e562; color: #333; } /* 3-4 */
-.level-low { background-color: #62f49c; color: #333; } /* 1-2 */
+.level-1 { background-color: #62f49c; color: #333; }
+.level-2 { background-color: #f4e562; color: #333; }
+.level-3 { background-color: #ff9900; }
+.level-4 { background-color: #ff4e4e; }
+.level-5 { background-color: #b30000; }
 .actions { 
   margin-top: 20px; 
   display: grid;

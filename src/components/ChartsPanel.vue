@@ -4,27 +4,27 @@
       <div class="div_any_child skeleton-item"></div>
       <div class="div_any_child skeleton-item"></div>
     </div>
-    <div v-else-if="stats" class="charts-container">
-      <!-- 饼图 -->
+    <div v-else-if="nodes && nodes.length > 0" class="charts-container">
+      <!-- Pie Chart -->
       <div class="div_any_child">
         <div class="div_any_title">
           <img src="/images/title_1.png"/>
-          运行节点总数：{{ totalNodes }}
+          Total Running Nodes: {{ totalNodes }}
         </div>
         <div ref="pieChartRef" class="p_chart"></div>
       </div>
 
-      <!-- 柱状图 -->
+      <!-- Bar Chart -->
       <div class="div_any_child">
         <div class="div_any_title">
           <img src="/images/title_2.png"/>
-          风险节点分类
+          Risk Category Breakdown
         </div>
         <div ref="barChartRef" class="p_chart"></div>
       </div>
     </div>
      <div v-else class="error-message">
-      图表数据加载失败...
+      Failed to load chart data...
     </div>
   </div>
 </template>
@@ -34,9 +34,9 @@ import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({
-  stats: {
-    type: Object,
-    default: () => null
+  nodes: {
+    type: Array,
+    default: () => []
   },
   loading: {
     type: Boolean,
@@ -51,13 +51,25 @@ let pieChart = null
 let barChart = null
 let isLegendListenerAttached = false;
 
-const totalNodes = computed(() => {
-  if (!props.stats || !props.stats.node_levels || !props.stats.node_levels.by_level) return 0;
-  return Object.values(props.stats.node_levels.by_level).reduce((sum, count) => sum + count, 0);
+const nodeLevels = computed(() => {
+  if (!props.nodes || props.nodes.length === 0) {
+    return { by_level: {}, total: 0 };
+  }
+  const by_level = props.nodes.reduce((acc, node) => {
+    const level = node.runtime_level || 0;
+    if (level > 0) { // Only count nodes with a risk level
+      acc[level] = (acc[level] || 0) + 1;
+    }
+    return acc;
+  }, {});
+  const total = props.nodes.length;
+  return { by_level, total };
 });
 
-const updateCharts = (statsData) => {
-  if (!statsData || !statsData.node_levels || !pieChartRef.value || !barChartRef.value) return;
+const totalNodes = computed(() => nodeLevels.value.total);
+
+const updateCharts = () => {
+  if (!nodeLevels.value || !pieChartRef.value || !barChartRef.value) return;
 
   if (!pieChart) pieChart = echarts.init(pieChartRef.value);
   if (!barChart) {
@@ -69,11 +81,11 @@ const updateCharts = (statsData) => {
     barChart.off('legendselectchanged');
   }
 
-  const { by_level } = statsData.node_levels;
+  const { by_level } = nodeLevels.value;
   const allLevels = Object.keys(by_level).map(Number).sort((a, b) => a - b);
 
   const pieData = allLevels.map(level => ({
-    name: `风险等级 ${level}`,
+    name: `Risk Level ${level}`,
     value: by_level[level],
   }));
 
@@ -82,7 +94,7 @@ const updateCharts = (statsData) => {
     tooltip: { trigger: 'item' },
     legend: { show: false },
     series: [{
-      name: '节点等级',
+      name: 'Node Level',
       type: 'pie',
       radius: '65%',
       center: ['50%', '45%'],
@@ -91,11 +103,11 @@ const updateCharts = (statsData) => {
     }]
   }, true);
 
-  const initialXAxisData = allLevels.map(level => `等级 ${level}`);
+  const initialXAxisData = allLevels.map(level => `Level ${level}`);
   const initialBarSeries = allLevels.map(level => ({
-    name: `等级 ${level}`,
+    name: `Level ${level}`,
     type: 'bar',
-    data: initialXAxisData.map(axisLabel => (axisLabel === `等级 ${level}` ? by_level[level] : 0)),
+    data: initialXAxisData.map(axisLabel => (axisLabel === `Level ${level}` ? by_level[level] : 0)),
     itemStyle: { color: getRiskColor(level) }
   }));
 
@@ -106,9 +118,9 @@ const updateCharts = (statsData) => {
       axisPointer: { type: 'shadow' },
       formatter: (params) => {
         const relevantParam = params.find(p => p.value > 0);
-        if (relevantParam) return `${relevantParam.seriesName}<br/>节点数: ${relevantParam.value}`;
-        if (params.length > 0) return `${params[0].axisValue}<br/>节点数: 0`;
-        return '无数据';
+        if (relevantParam) return `${relevantParam.seriesName}<br/>Node Count: ${relevantParam.value}`;
+        if (params.length > 0) return `${params[0].axisValue}<br/>Node Count: 0`;
+        return 'No Data';
       }
     },
     legend: {
@@ -133,19 +145,19 @@ const updateCharts = (statsData) => {
   }, true);
 
   barChart.on('legendselectchanged', (params) => {
-    const { by_level: current_by_level } = props.stats.node_levels;
+    const { by_level: current_by_level } = nodeLevels.value;
     const { selected } = params;
 
     const selectedLevels = Object.entries(selected)
       .filter(([, isSelected]) => isSelected)
-      .map(([name]) => parseInt(name.replace('等级 ', ''), 10))
+      .map(([name]) => parseInt(name.replace('Level ', ''), 10))
       .sort((a, b) => a - b);
 
-    const newXAxisData = selectedLevels.map(level => `等级 ${level}`);
+    const newXAxisData = selectedLevels.map(level => `Level ${level}`);
     const newBarSeries = selectedLevels.map(level => ({
-      name: `等级 ${level}`,
+      name: `Level ${level}`,
       type: 'bar',
-      data: newXAxisData.map(axisLabel => (axisLabel === `等级 ${level}` ? current_by_level[level] || 0 : 0)),
+      data: newXAxisData.map(axisLabel => (axisLabel === `Level ${level}` ? current_by_level[level] || 0 : 0)),
       itemStyle: { color: getRiskColor(level) }
     }));
 
@@ -158,11 +170,14 @@ const updateCharts = (statsData) => {
 };
 
 const getRiskColor = (level) => {
-  if (level >= 9) return '#b30000'; // Critical
-  if (level >= 7) return '#ff4e4e'; // High
-  if (level >= 5) return '#ff9900'; // Medium-High
-  if (level >= 3) return '#f4e562'; // Medium
-  return '#62f49c'; // Low
+  const colors = {
+    1: '#62f49c',    // Low
+    2: '#f4e562',    // Medium
+    3: '#ff9900',    // Medium-High
+    4: '#ff4e4e',    // High
+    5: '#b30000',    // Critical
+  };
+  return colors[level] || '#ccc'; // Default
 };
 
 const resizeCharts = () => {
@@ -181,10 +196,10 @@ onBeforeUnmount(() => {
 })
 
 
-watch(() => props.stats, (newStats) => {
-  if (!props.loading && newStats) {
+watch(() => props.nodes, (newNodes) => {
+  if (!props.loading && newNodes && newNodes.length > 0) {
      nextTick(() => {
-        updateCharts(newStats)
+        updateCharts();
      });
   }
 }, { immediate: true, deep: true })
@@ -192,7 +207,7 @@ watch(() => props.stats, (newStats) => {
 </script>
 
 <style scoped>
-/* 样式主要继承 common.css，.p_chart 保证尺寸 */
+/* Styles are mainly inherited from common.css, .p_chart ensures size */
 .charts-container {
   display: flex;
   flex-direction: column;

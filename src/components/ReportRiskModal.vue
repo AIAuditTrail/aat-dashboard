@@ -1,29 +1,29 @@
 <template>
   <div v-if="show" class="modal-overlay" @click.self="close">
     <div class="modal-content">
-      <h3 class="modal-title">为 "{{ nodeName }}" 上报风险</h3>
+      <h3 class="modal-title">Report Risk for "{{ nodeName }}"</h3>
       <form @submit.prevent="handleSubmit">
         <div class="form-group">
-          <label for="trajectoryId">轨迹 (Trajectory)</label>
+          <label for="trajectoryId">Trajectory</label>
           <select id="trajectoryId" v-model="form.trajectory_id" required>
-            <option v-if="trajectories.length === 0" value="" disabled>加载轨迹中...</option>
+            <option v-if="trajectories.length === 0" value="" disabled>Loading trajectories...</option>
             <option v-for="traj in trajectories" :key="traj.id" :value="traj.id">
               {{ traj.title }}
             </option>
           </select>
         </div>
         <div class="form-group">
-          <label for="level">风险等级 (1-5)</label>
+          <label for="level">Risk Level (1-5)</label>
           <input id="level" v-model.number="form.level" type="number" min="1" max="5" required>
         </div>
         <div class="form-group">
-          <label for="description">风险描述</label>
-          <textarea id="description" v-model="form.description" required placeholder="请详细描述风险情况..."></textarea>
+          <label for="description">Risk Description</label>
+          <textarea id="description" v-model="form.description" required placeholder="Please describe the risk in detail..."></textarea>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" @click="close">取消</button>
+          <button type="button" class="btn-secondary" @click="close">Cancel</button>
           <button type="submit" class="btn-primary" :disabled="submitting">
-            {{ submitting ? '提交中...' : '确认上报' }}
+            {{ submitting ? 'Submitting...' : 'Confirm Report' }}
           </button>
         </div>
       </form>
@@ -81,7 +81,7 @@ const close = () => {
 
 const handleSubmit = async () => {
   if (!form.trajectory_id) {
-    alert('请选择一个轨迹。');
+    alert('Please select a trajectory.');
     return;
   }
   submitting.value = true

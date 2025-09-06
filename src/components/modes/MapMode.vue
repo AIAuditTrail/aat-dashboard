@@ -27,20 +27,30 @@ const provinceNameMap = {
     'Sichuan': '四川', 'Tianjin': '天津', 'Tibet': '西藏', 'Xinjiang': '新疆', 'Yunnan': '云南', 'Zhejiang': '浙江'
 };
 
+// Create a reverse map for universal English label display
+const chineseToEnglishMap = Object.fromEntries(
+  Object.entries(provinceNameMap).map(([english, chinese]) => [chinese, english])
+);
+
 const processMapData = (provincesData) => {
   if (!provincesData) return [];
   return provincesData.map(p => {
-    let riskScore = 1; // Default to lowest risk
-    if (p.by_level && p.total_nodes > 0) {
-      const weightedSum = Object.entries(p.by_level).reduce((sum, [level, count]) => {
-        return sum + (parseInt(level, 10) * count);
+    let riskNodesCount = 0;
+    if (p.by_level) {
+      // Risk nodes are levels > 2 (medium and high risk)
+      riskNodesCount = Object.entries(p.by_level).reduce((sum, [level, count]) => {
+        if (parseInt(level, 10) > 2) {
+          return sum + count;
+        }
+        return sum;
       }, 0);
-      riskScore = weightedSum / p.total_nodes;
     }
     return {
       name: provinceNameMap[p.province] || p.province,
-      value: riskScore.toFixed(2),
-      total_nodes: p.total_nodes || 0
+      englishName: p.province,
+      value: riskNodesCount,
+      total_nodes: p.total_nodes || 0,
+      risk_nodes_count: riskNodesCount
     };
   });
 }
@@ -51,8 +61,17 @@ const updateChart = () => {
   if (width === 0 || height === 0) return;
 
   const seriesData = processMapData(props.provinces);
-  
+
+  // Dynamically calculate the max value for the visual map range
+  const maxRiskNodesCount = seriesData.length > 0
+    ? Math.max(...seriesData.map(p => p.value || 0))
+    : 1; // Default to 1 to avoid a 0-0 range if no data
+
   chartInstance.setOption({
+    visualMap: {
+      min: 0,
+      max: maxRiskNodesCount,
+    },
     series: [{
       data: seriesData
     }]
@@ -72,9 +91,9 @@ onMounted(async () => {
       chartInstance = echarts.init(chartRef.value);
 
       chartInstance.on('click', (params) => {
-        if (params.componentType === 'series' && params.seriesType === 'map') {
-          const provinceName = params.name;
-          const provinceData = props.provinces.find(p => provinceNameMap[p.province] === provinceName || p.province === provinceName);
+        if (params.componentType === 'series' && params.seriesType === 'map' && params.data) {
+          const englishName = params.data.englishName;
+          const provinceData = props.provinces.find(p => p.province === englishName);
           if (provinceData) {
             emit('province-selected', provinceData);
           }
@@ -86,21 +105,31 @@ onMounted(async () => {
         tooltip: {
           trigger: 'item',
           formatter: (params) => {
-            if (params.data && params.value) {
-              return `${params.name}<br/>平均风险: ${params.value}<br/>节点总数: ${params.data.total_nodes}`;
+            const cleanName = params.name.replace(/省|市|自治区|特别行政区|壮族|回族|维吾尔/g, '');
+            const englishName = chineseToEnglishMap[cleanName] || params.name;
+            if (params.data) {
+              return `${englishName}<br/>Risk Nodes: ${params.data.risk_nodes_count}<br/>Total Nodes: ${params.data.total_nodes}`;
             }
-            return `${params.name}<br/>暂无数据`;
+            return `${englishName}<br/>No data available`;
           }
         },
         visualMap: {
-          min: 1, max: 5, left: 'left', bottom: '5%',
-          text: ['高', '低'], calculable: true,
-          inRange: { color: ['#50a3ba', '#eac736', '#d94e5d'] },
+          left: 'left', bottom: '5%',
+          text: ['High', 'Low'], calculable: true,
+          inRange: { color: ['#62f49c', '#f4e562', '#ff4e4e'] },
           textStyle: { color: '#fff' }
         },
         series: [{
-          name: '平均风险', type: 'map', map: 'china', roam: true,
-          label: { show: true, color: '#ffffff' },
+          name: 'Average Risk', type: 'map', map: 'china', roam: true,
+          label: {
+            show: true,
+            color: '#ffffff',
+            formatter: (params) => {
+              // Clean the geoJSON name and then map to English
+              const cleanName = params.name.replace(/省|市|自治区|特别行政区|壮族|回族|维吾尔/g, '');
+              return chineseToEnglishMap[cleanName] || params.name;
+            }
+          },
           itemStyle: { areaColor: '#003366', borderColor: '#0ba3b0' },
           emphasis: { itemStyle: { areaColor: '#2a333d' } },
           data: []

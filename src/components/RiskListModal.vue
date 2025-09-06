@@ -2,11 +2,11 @@
   <div v-if="show" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <!-- Title changes based on view -->
-      <h3 class="modal-title">{{ currentView === 'list' ? `节点 "${nodeName}" 的风险列表` : '风险详情' }}</h3>
+      <h3 class="modal-title">{{ currentView === 'list' ? `Risk List for "${nodeName}"` : 'Risk Details' }}</h3>
       
-      <div v-if="loading" class="loading-placeholder">正在加载...</div>
-      <div v-else-if="error" class="error-message">加载失败。</div>
-      <div v-else-if="alerts.length === 0 && currentView === 'list'" class="empty-state">该节点暂无风险记录。</div>
+      <div v-if="loading" class="loading-placeholder">Loading...</div>
+      <div v-else-if="error" class="error-message">Failed to load.</div>
+      <div v-else-if="alerts.length === 0 && currentView === 'list'" class="empty-state">No risk records for this node.</div>
       
       <!-- Main Content Area -->
       <div v-else class="content-container">
@@ -16,7 +16,7 @@
             <li v-for="alert in alerts" :key="alert.id" class="risk-item" @click="selectAlert(alert)">
               <span class="level-indicator" :class="`level-${alert.level}`">Lv.{{ alert.level }}</span>
               <span class="description">{{ alert.description }}</span>
-              <span class="view-details">查看详情 &rarr;</span>
+              <span class="view-details">View Details &rarr;</span>
             </li>
           </ul>
         </div>
@@ -25,21 +25,21 @@
         <div v-else-if="currentView === 'detail' && selectedAlert" class="risk-detail">
             <div class="detail-grid">
                 <div class="detail-row"><strong>ID:</strong> <span>{{ selectedAlert.id }}</span></div>
-                <div class="detail-row"><strong>风险等级:</strong> <span class="level-indicator" :class="`level-${selectedAlert.level}`">{{ selectedAlert.level }}</span></div>
-                <div class="detail-row"><strong>状态:</strong> <span>{{ selectedAlert.status }}</span></div>
-                <div class="detail-row"><strong>创建时间:</strong> <span>{{ new Date(selectedAlert.created_at).toLocaleString() }}</span></div>
-                <div class="detail-row full-width"><strong>描述:</strong> <p>{{ selectedAlert.description }}</p></div>
+                <div class="detail-row"><strong>Risk Level:</strong> <span class="level-indicator" :class="`level-${selectedAlert.level}`">{{ selectedAlert.level }}</span></div>
+                <div class="detail-row"><strong>Status:</strong> <span>{{ selectedAlert.status }}</span></div>
+                <div class="detail-row"><strong>Created At:</strong> <span>{{ new Date(selectedAlert.created_at).toLocaleString() }}</span></div>
+                <div class="detail-row full-width"><strong>Description:</strong> <p>{{ selectedAlert.description }}</p></div>
             </div>
             <div class="detail-actions">
-              <button type="button" class="btn-primary" @click="goToTrace(selectedAlert.id, 'alert')">发起新溯源</button>
+              <button type="button" class="btn-primary" @click="goToTrace(selectedAlert.id, 'alert')">Start New Trace</button>
             </div>
             
             <div v-if="selectedAlert.traceRuns && selectedAlert.traceRuns.length > 0" class="trace-runs-section">
-              <h4>历史溯源记录</h4>
+              <h4>Trace History</h4>
               <ul class="trace-run-list">
                 <li v-for="run in selectedAlert.traceRuns" :key="run.id" class="trace-run-item">
                   <span>{{ new Date(run.computed_at).toLocaleString() }}</span>
-                  <button class="btn-secondary" @click="goToTrace(run.id, 'trace')">回放</button>
+                  <button class="btn-secondary" @click="goToTrace(run.id, 'trace')">Replay</button>
                 </li>
               </ul>
             </div>
@@ -48,8 +48,8 @@
       
       <!-- Footer Actions -->
       <div class="modal-actions">
-        <button v-if="currentView === 'detail'" type="button" class="btn-secondary" @click="backToList">&larr; 返回列表</button>
-        <button type="button" class="btn-secondary" @click="close">关闭</button>
+        <button v-if="currentView === 'detail'" type="button" class="btn-secondary" @click="backToList">&larr; Back to List</button>
+        <button type="button" class="btn-secondary" @click="close">Close</button>
       </div>
     </div>
   </div>

@@ -1,41 +1,41 @@
 <template>
   <div v-if="show" class="modal-overlay" @click.self="close">
     <div class="modal-content">
-      <h3 class="modal-title">对节点 "{{ nodeName }}" 进行安全审计</h3>
+      <h3 class="modal-title">Security Audit for Node "{{ nodeName }}"</h3>
 
-      <div v-if="loading" class="loading-placeholder">正在加载审计预览...</div>
+      <div v-if="loading" class="loading-placeholder">Loading audit preview...</div>
       <div v-else-if="error" class="error-message">{{ error }}</div>
 
       <!-- Step 1: Audit Preview -->
       <div v-if="!auditResult && !loading" class="audit-preview">
         <div class="source-node-section">
-          <h4>源节点</h4>
-          <p><strong>{{ sourceNode?.name }}</strong> (当前风险等级: {{ sourceNode?.runtime_level }})</p>
-          <p class="target-level-info">审计将把所有符合条件的邻居节点的风险等级提升至 <strong>{{ targetNeighborLevel }}</strong>。</p>
+          <h4>Source Node</h4>
+          <p><strong>{{ sourceNode?.name }}</strong> (Current Risk Level: {{ sourceNode?.runtime_level }})</p>
+          <p class="target-level-info">The audit will raise the risk level of all eligible neighbors to <strong>{{ targetNeighborLevel }}</strong>.</p>
         </div>
         <div class="neighbors-section">
-          <h4>邻居节点 ({{ neighbors.length }})</h4>
+          <h4>Neighbor Nodes ({{ neighbors.length }})</h4>
           <ul v-if="neighbors.length > 0" class="neighbor-list">
             <li v-for="neighbor in neighbors" :key="neighbor.id" class="neighbor-item">
               <span>{{ neighbor.name }}</span>
               <span :class="`level-text-${getRiskLevelClass(neighbor.effective_level)}`">
-                (当前: {{ neighbor.effective_level }})
+                (Current: {{ neighbor.effective_level }})
               </span>
               <span v-if="neighbor.effective_level < targetNeighborLevel" class="level-update-indicator">
                 &rarr; {{ targetNeighborLevel }}
               </span>
             </li>
           </ul>
-          <p v-else>该节点没有邻居。</p>
+          <p v-else>This node has no neighbors.</p>
         </div>
       </div>
 
       <!-- Step 2: Audit Result -->
       <div v-if="auditResult" class="audit-result">
-        <h4>审计完成</h4>
+        <h4>Audit Complete</h4>
         <p class="summary-message">{{ auditResult.summary }}</p>
         <div v-if="auditResult.updated_neighbors.length > 0" class="neighbors-section">
-          <h5>已更新的邻居</h5>
+          <h5>Updated Neighbors</h5>
           <ul class="neighbor-list">
             <li v-for="neighbor in auditResult.updated_neighbors" :key="neighbor.node_id" class="neighbor-item updated">
               <span>{{ neighbor.name }}</span>
@@ -44,11 +44,11 @@
           </ul>
         </div>
          <div v-if="auditResult.unchanged_neighbors.length > 0" class="neighbors-section">
-          <h5>未改变的邻居</h5>
+          <h5>Unchanged Neighbors</h5>
           <ul class="neighbor-list">
             <li v-for="neighbor in auditResult.unchanged_neighbors" :key="neighbor.node_id" class="neighbor-item unchanged">
               <span>{{ neighbor.name }}</span>
-              <span>(等级 {{ neighbor.current_level }} &ge; {{ targetNeighborLevel }})</span>
+              <span>(Level {{ neighbor.current_level }} &ge; {{ targetNeighborLevel }})</span>
             </li>
           </ul>
         </div>
@@ -56,10 +56,10 @@
 
       <div class="modal-actions">
         <button type="button" class="btn-secondary" @click="close">
-          {{ auditResult ? '关闭' : '取消' }}
+          {{ auditResult ? 'Close' : 'Cancel' }}
         </button>
         <button v-if="!auditResult" type="button" class="btn-primary" @click="executeAudit" :disabled="submitting">
-          {{ submitting ? '审计中...' : '确认审计' }}
+          {{ submitting ? 'Auditing...' : 'Confirm Audit' }}
         </button>
       </div>
     </div>
@@ -107,14 +107,14 @@ const fetchAuditPreview = async () => {
     ]);
 
     if (!nodeDetails) {
-      throw new Error("源节点未找到。");
+      throw new Error("Source node not found.");
     }
 
     sourceNode.value = nodeDetails;
     neighbors.value = nodeNeighbors || [];
   } catch (err) {
     console.error(`Failed to fetch audit preview for node ${props.nodeId}:`, err);
-    error.value = err.message || "加载审计预览失败。";
+    error.value = err.message || "Failed to load audit preview.";
   } finally {
     loading.value = false;
   }
@@ -128,7 +128,7 @@ const executeAudit = async () => {
     auditResult.value = result;
   } catch (err) {
      console.error(`Failed to apply audit for node ${props.nodeId}:`, err);
-    error.value = err.message || "执行审计失败。";
+    error.value = err.message || "Failed to execute audit.";
   } finally {
     submitting.value = false;
   }

@@ -1,14 +1,14 @@
 <template>
   <div v-if="show" class="modal-overlay" @click.self="close">
     <div class="modal-content">
-      <h3 class="modal-title">为 "{{ nodeName }}" 进行内容审计</h3>
+      <h3 class="modal-title">Content Audit for "{{ nodeName }}"</h3>
       <form @submit.prevent="handleSubmit">
         <!-- Step 1: Select Trajectory -->
         <div class="form-group">
-          <label for="trajectoryId">选择轨迹 (Trajectory)</label>
+          <label for="trajectoryId">Select Trajectory</label>
           <select id="trajectoryId" v-model="selectedTrajectoryId" :disabled="loadingTrajectories" @change="handleTrajectoryChange">
             <option value="" disabled>
-              {{ loadingTrajectories ? '加载轨迹中...' : '请选择一个轨迹' }}
+              {{ loadingTrajectories ? 'Loading trajectories...' : 'Please select a trajectory' }}
             </option>
             <option v-for="traj in trajectories" :key="traj.id" :value="traj.id">
               {{ traj.title }}
@@ -18,23 +18,23 @@
 
         <!-- Step 2: Edit Content -->
         <div class="form-group">
-          <label for="outputContent">节点输出内容</label>
-          <div v-if="loadingContent" class="loading-placeholder">正在加载内容...</div>
+          <label for="outputContent">Node Output Content</label>
+          <div v-if="loadingContent" class="loading-placeholder">Loading content...</div>
           <textarea 
             v-else 
             id="outputContent" 
             v-model="form.output_content" 
             :disabled="!selectedTrajectoryId || submitting"
-            placeholder="选择轨迹后，将在此处显示和编辑内容..."
+            placeholder="Select a trajectory to view and edit content..."
             rows="8"
           ></textarea>
         </div>
 
         <!-- Actions -->
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" @click="close" :disabled="submitting">取消</button>
+          <button type="button" class="btn-secondary" @click="close" :disabled="submitting">Cancel</button>
           <button type="submit" class="btn-primary" :disabled="!selectedTrajectoryId || submitting">
-            {{ submitting ? '提交中...' : '确认修改' }}
+            {{ submitting ? 'Submitting...' : 'Confirm Changes' }}
           </button>
         </div>
       </form>
@@ -72,7 +72,7 @@ const fetchTrajectories = async (nodeId) => {
   } catch (err) {
     console.error(`Failed to fetch trajectories for node ${nodeId}:`, err);
     trajectories.value = [];
-    alert('获取轨迹列表失败！');
+    alert('Failed to fetch trajectory list!');
   } finally {
     loadingTrajectories.value = false;
   }
@@ -89,8 +89,8 @@ const handleTrajectoryChange = async () => {
     form.output_content = response?.output_content || '';
   } catch (err) {
     console.error(`Failed to fetch content for node ${props.nodeId} in trajectory ${selectedTrajectoryId.value}:`, err);
-    form.output_content = '内容加载失败。';
-    alert('获取节点内容失败！');
+    form.output_content = 'Failed to load content.';
+    alert('Failed to fetch node content!');
   } finally {
     loadingContent.value = false;
   }
@@ -98,22 +98,22 @@ const handleTrajectoryChange = async () => {
 
 const handleSubmit = async () => {
   if (!selectedTrajectoryId.value) {
-    alert('请先选择一个轨迹。');
+    alert('Please select a trajectory first.');
     return;
   }
   submitting.value = true;
   try {
     const response = await updateNodeOutput(selectedTrajectoryId.value, props.nodeId, form);
     if (response.riskLevelElevated) {
-      alert('内容包含敏感信息，风险等级已自动提升！');
+      alert('Content included sensitive information. Risk level has been automatically elevated!');
     } else {
-      alert('内容更新成功。');
+      alert('Content updated successfully.');
     }
     emit('data-updated');
     close();
   } catch (err) {
     console.error('Failed to update content:', err);
-    alert('内容更新失败！');
+    alert('Failed to update content!');
   } finally {
     submitting.value = false;
   }
