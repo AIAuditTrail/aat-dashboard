@@ -35,8 +35,9 @@
         :province="selectedProvince" 
         :trajectory="selectedTrajectory" 
         :stats="stats.data" 
-        @data-updated="fetchData"
+        @data-updated="refreshData"
         @view-trajectory-graph="handleViewTrajectoryGraph"
+        @node-selected="handleNodeSelected"
       />
     </div>
 
@@ -73,9 +74,9 @@ const selectedProvince = ref(null)
 const selectedTrajectory = ref(null)
 const showTrajectoryModal = ref(false)
 
-async function fetchStats() {
+async function fetchStats(isRefresh = false) {
   try {
-    stats.loading = true
+    if (!isRefresh) stats.loading = true
     const rawData = await getStatsOverview({ tz: 'Asia/Shanghai', includeResolved: true })
     
     if (rawData) {
@@ -94,34 +95,38 @@ async function fetchStats() {
     stats.error = err
     stats.data = null;
   } finally {
-    stats.loading = false
+    if (!isRefresh) stats.loading = false
   }
 }
 
-async function fetchData() {
-  await Promise.all([fetchStats(), fetchNodes(), fetchTrajectories()]);
-}
-
-async function fetchNodes() {
+async function fetchNodes(isRefresh = false) {
   try {
-    nodes.loading = true
+    if (!isRefresh) nodes.loading = true
     nodes.data = await getNodes({}) // Simplified for now
   } catch (err) {
     nodes.error = err
   } finally {
-    nodes.loading = false
+    if (!isRefresh) nodes.loading = false
   }
 }
 
-async function fetchTrajectories() {
+async function fetchTrajectories(isRefresh = false) {
   try {
-    trajectories.loading = true
+    if (!isRefresh) trajectories.loading = true
     trajectories.data = await getTrajectories() || []
   } catch (err) {
     trajectories.error = err
   } finally {
-    trajectories.loading = false
+    if (!isRefresh) trajectories.loading = false
   }
+}
+
+async function fetchData() {
+  await Promise.all([fetchStats(false), fetchNodes(false), fetchTrajectories(false)]);
+}
+
+async function refreshData() {
+  await Promise.all([fetchStats(true), fetchNodes(true), fetchTrajectories(true)]);
 }
 
 function handleNodeSelected(nodeId) {

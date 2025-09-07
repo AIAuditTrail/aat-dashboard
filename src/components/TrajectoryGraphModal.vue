@@ -23,7 +23,6 @@
 
         <div class="sidebar">
           <div class="actions-panel">
-            <button @click="handleInjectAuditableRisk" :disabled="isActionInProgress">Inject Auditable Risk</button>
             <button @click="handleAudit" :disabled="isActionInProgress">Perform Content Audit</button>
           </div>
 
@@ -38,9 +37,6 @@
               {{ selectedNode.__outDegree ?? 0 }}</code></div>
           </div>
 
-          <div v-if="injectedNodeId" class="notice">
-            Auditable risk has been injected into node <strong>{{ injectedNodeId }}</strong>.
-          </div>
 
           <div class="legend">
             <h4>Legend</h4>
@@ -63,7 +59,7 @@
 <script setup>
 import {ref, watch, onMounted, onBeforeUnmount, computed, nextTick} from 'vue';
 import * as echarts from 'echarts';
-import {getTrajectoryGraph, injectRiskToTrajectory, auditTrajectory, updateNodeOutput} from '@/api';
+import {getTrajectoryGraph, auditTrajectory, updateNodeOutput} from '@/api';
 
 const props = defineProps({
   show: {type: Boolean, default: false},
@@ -81,10 +77,9 @@ const error = ref(null);
 const isActionInProgress = ref(false);
 
 const selectedNode = ref(null);
-const injectedNodeId = ref(null);
-
 const layoutMode = ref('dag'); // 'dag' | 'force'
 const graphRaw = ref({nodes: [], edges: []});
+
 
 const safeTitle = computed(() => props.trajectoryTitle || props.trajectoryId || 'Untitled');
 
@@ -356,7 +351,6 @@ const fetchDataAndRender = async () => {
   loading.value = true;
   error.value = null;
   selectedNode.value = null;
-  injectedNodeId.value = null;
   try {
     const graphData = await getTrajectoryGraph(props.trajectoryId);
     graphRaw.value = {
@@ -377,44 +371,14 @@ const fetchDataAndRender = async () => {
   }
 };
 
-const handleInjectAuditableRisk = async () => {
-  isActionInProgress.value = true;
-  try {
-    // 找一个名字包含 Merger 的节点，若无则用出度最大的节点
-    const all = (graphRaw.value.nodes || []);
-    let target = all.find(n => (n.name || '').includes('Merger'));
-    if (!target) {
-      // 计算出度
-      const out = new Map();
-      (graphRaw.value.edges || []).forEach(e => {
-        const u = String(e.from ?? e.source);
-        out.set(u, (out.get(u) ?? 0) + 1);
-      });
-      target = all.map(n => ({n, d: out.get(String(n.id ?? n.node_id)) ?? 0}))
-          .sort((a, b) => b.d - a.d)[0]?.n || all[0];
-    }
-    if (!target) {
-      alert('No injectable node found in the trajectory.');
-      return;
-    }
 
-    injectedNodeId.value = String(target.id ?? target.node_id);
-    const payload = {output_content: "This report contains plagiarism and violates our policy."};
-    await updateNodeOutput(props.trajectoryId, injectedNodeId.value, payload);
-    await injectRiskToTrajectory(props.trajectoryId, {node_id: injectedNodeId.value, reason: 'Plagiarism suspected'});
-  } catch (e) {
-    console.error(e);
-    alert('Injection failed, please check the console.');
-  } finally {
-    isActionInProgress.value = false;
-  }
-};
 
 const handleAudit = async () => {
   isActionInProgress.value = true;
   try {
-    await auditTrajectory(props.trajectoryId);
-    setTimeout(() => fetchDataAndRender(), 500);
+    const result = await auditTrajectory(props.trajectoryId);
+    alert(result.summary || 'Audit complete!');
+    await fetchDataAndRender(); // Refresh graph to show updated risk levels
   } catch (e) {
     console.error(e);
     alert('Audit failed, please check the console.');
@@ -457,6 +421,7 @@ watch(() => props.show, async (v) => {
 watch(() => props.trajectoryId, async (v) => {
   if (props.show && v) await fetchDataAndRender();
 });
+
 
 onMounted(() => {
   if (props.show && props.trajectoryId) fetchDataAndRender();

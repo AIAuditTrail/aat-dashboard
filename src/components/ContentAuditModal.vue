@@ -2,21 +2,9 @@
   <div v-if="show" class="modal-overlay" @click.self="close">
     <div class="modal-content">
       <h3 class="modal-title">Content Audit for "{{ nodeName }}"</h3>
+      <p class="trajectory-info">Trajectory ID: <strong>{{ trajectoryId || 'N/A' }}</strong></p>
+      
       <form @submit.prevent="handleSubmit">
-        <!-- Step 1: Select Trajectory -->
-        <div class="form-group">
-          <label for="trajectoryId">Select Trajectory</label>
-          <select id="trajectoryId" v-model="selectedTrajectoryId" :disabled="loadingTrajectories" @change="handleTrajectoryChange">
-            <option value="" disabled>
-              {{ loadingTrajectories ? 'Loading trajectories...' : 'Please select a trajectory' }}
-            </option>
-            <option v-for="traj in trajectories" :key="traj.id" :value="traj.id">
-              {{ traj.title }}
-            </option>
-          </select>
-        </div>
-
-        <!-- Step 2: Edit Content -->
         <div class="form-group">
           <label for="outputContent">Node Output Content</label>
           <div v-if="loadingContent" class="loading-placeholder">Loading content...</div>
@@ -24,17 +12,16 @@
             v-else 
             id="outputContent" 
             v-model="form.output_content" 
-            :disabled="!selectedTrajectoryId || submitting"
-            placeholder="Select a trajectory to view and edit content..."
+            :disabled="!trajectoryId || submitting"
+            placeholder="Content will be loaded once a trajectory is selected."
             rows="8"
           ></textarea>
         </div>
 
-        <!-- Actions -->
         <div class="modal-actions">
           <button type="button" class="btn-secondary" @click="close" :disabled="submitting">Cancel</button>
-          <button type="submit" class="btn-primary" :disabled="!selectedTrajectoryId || submitting">
-            {{ submitting ? 'Submitting...' : 'Confirm Changes' }}
+          <button type="submit" class="btn-primary" :disabled="!trajectoryId || submitting">
+            {{ submitting ? 'Submitting...' : 'Update & Audit' }}
           </button>
         </div>
       </form>
@@ -44,19 +31,17 @@
 
 <script setup>
 import { ref, reactive, watch } from 'vue';
-import { getNodeTrajectories, getNodeOutput, updateNodeOutput } from '@/api';
+import { getNodeOutput, updateNodeOutput, auditTrajectory } from '@/api';
 
 const props = defineProps({
   show: Boolean,
   nodeId: String,
   nodeName: String,
+  trajectoryId: String, // Added trajectoryId as a prop
 });
 
 const emit = defineEmits(['close', 'data-updated']);
 
-const trajectories = ref([]);
-const selectedTrajectoryId = ref('');
-const loadingTrajectories = ref(false);
 const loadingContent = ref(false);
 const submitting = ref(false);
 
@@ -64,31 +49,17 @@ const form = reactive({
   output_content: '',
 });
 
-const fetchTrajectories = async (nodeId) => {
-  if (!nodeId) return;
-  loadingTrajectories.value = true;
-  try {
-    trajectories.value = await getNodeTrajectories(nodeId) || [];
-  } catch (err) {
-    console.error(`Failed to fetch trajectories for node ${nodeId}:`, err);
-    trajectories.value = [];
-    alert('Failed to fetch trajectory list!');
-  } finally {
-    loadingTrajectories.value = false;
-  }
-};
-
-const handleTrajectoryChange = async () => {
-  if (!selectedTrajectoryId.value) {
+const fetchContent = async () => {
+  if (!props.trajectoryId || !props.nodeId) {
     form.output_content = '';
     return;
   }
   loadingContent.value = true;
   try {
-    const response = await getNodeOutput(selectedTrajectoryId.value, props.nodeId);
+    const response = await getNodeOutput(props.trajectoryId, props.nodeId);
     form.output_content = response?.output_content || '';
   } catch (err) {
-    console.error(`Failed to fetch content for node ${props.nodeId} in trajectory ${selectedTrajectoryId.value}:`, err);
+    console.error(`Failed to fetch content for node ${props.nodeId} in trajectory ${props.trajectoryId}:`, err);
     form.output_content = 'Failed to load content.';
     alert('Failed to fetch node content!');
   } finally {
@@ -97,33 +68,32 @@ const handleTrajectoryChange = async () => {
 };
 
 const handleSubmit = async () => {
-  if (!selectedTrajectoryId.value) {
-    alert('Please select a trajectory first.');
+  if (!props.trajectoryId) {
+    alert('Trajectory not selected.');
     return;
   }
   submitting.value = true;
   try {
-    const response = await updateNodeOutput(selectedTrajectoryId.value, props.nodeId, form);
-    if (response.riskLevelElevated) {
-      alert('Content included sensitive information. Risk level has been automatically elevated!');
-    } else {
-      alert('Content updated successfully.');
-    }
+    // First, update the content
+    await updateNodeOutput(props.trajectoryId, props.nodeId, form);
+    
+    // Then, trigger the audit on the whole trajectory
+    const auditResult = await auditTrajectory(props.trajectoryId);
+    
+    alert(auditResult.summary || 'Content updated and audit completed!');
+    
     emit('data-updated');
     close();
   } catch (err) {
-    console.error('Failed to update content:', err);
-    alert('Failed to update content!');
+    console.error('Failed to update content or run audit:', err);
+    alert('An error occurred during the process.');
   } finally {
     submitting.value = false;
   }
 };
 
 const resetState = () => {
-  trajectories.value = [];
-  selectedTrajectoryId.value = '';
   form.output_content = '';
-  loadingTrajectories.value = false;
   loadingContent.value = false;
   submitting.value = false;
 };
@@ -134,8 +104,8 @@ const close = () => {
 };
 
 watch(() => props.show, (newVal) => {
-  if (newVal && props.nodeId) {
-    fetchTrajectories(props.nodeId);
+  if (newVal) {
+    fetchContent();
   } else {
     resetState();
   }

@@ -8,22 +8,47 @@
       </div>
       <div v-else-if="error" class="sidebar-content error-message">Failed to load...</div>
       
-      <div v-else-if="displayMode !== 'none'" class="sidebar-content details-grid">
-        <template v-for="detail in details" :key="detail.label">
-          <div class="detail-item" :class="{ 'description': detail.isDescription }">
-            <span class="label">{{ detail.label }}:</span>
-            <span class="value" :class="detail.class || ''">{{ detail.value }}</span>
+      <div v-else-if="displayMode !== 'none'" class="sidebar-content">
+        <div v-if="displayMode === 'trajectory' && trajectoryViewMode === 'riskList'" class="risk-node-list-container">
+          <div v-if="isNodeListLoading" class="loading-skeleton" style="height: 100%;"></div>
+          <div v-else-if="riskyNodes.length > 0" class="risk-node-list">
+            <div
+              v-for="node in riskyNodes"
+              :key="node.node_id || node.id"
+              class="risk-node-item"
+              @click="$emit('node-selected', node.node_id || node.id)"
+            >
+              <span class="node-name">{{ node.name }}</span>
+              <span class="node-risk" :style="{ color: getRiskColor(node.risk_level ?? node.runtime_level) }">
+                Level {{ node.risk_level ?? node.runtime_level }}
+              </span>
+            </div>
           </div>
-        </template>
+          <div v-else class="placeholder">
+            <p>No risky nodes (level > 1) found in this trajectory.</p>
+          </div>
+        </div>
+        <div v-else class="details-grid">
+          <template v-for="detail in details" :key="detail.label">
+            <div class="detail-item" :class="{ 'description': detail.isDescription }">
+              <span class="label">{{ detail.label }}:</span>
+              <span class="value" :class="detail.class || ''">{{ detail.value }}</span>
+            </div>
+          </template>
+        </div>
         
         <div v-if="displayMode === 'node'" class="actions">
           <button class="action-btn" @click="showReportModal = true">Report Risk</button>
           <button class="action-btn" @click="handleShowRiskList">Risk List</button>
-          <button class="action-btn" @click="showContentAuditModal = true">Content Audit</button>
+          <button class="action-btn" @click="handleContentAudit">Content Audit</button>
           <button class="action-btn" @click="handleSecurityAudit">Security Audit</button>
+          <button class="action-btn" @click="handleUpdateContent">Update Content</button>
         </div>
         <div v-if="displayMode === 'trajectory'" class="actions">
           <button class="action-btn" @click="$emit('view-trajectory-graph', props.trajectory)">View Topology</button>
+          <button class="action-btn" @click="handleTrajectoryAudit">
+            {{ trajectoryViewMode === 'details' ? 'Audit' : 'Back to Details' }}
+          </button>
         </div>
       </div>
       
@@ -66,6 +91,7 @@
       :show="showContentAuditModal"
       :node-id="props.nodeId"
       :node-name="node?.name"
+      :trajectory-id="selectedTrajectoryForAction?.id"
       @close="showContentAuditModal = false"
       @data-updated="$emit('data-updated')"
     />
@@ -76,18 +102,50 @@
       :node-name="node?.name"
       @close="showSecurityAuditModal = false"
     />
+    <UpdateContentModal
+      :show="showUpdateContentModal"
+      :trajectory-id="selectedTrajectoryForAction?.id"
+      :node-id="props.nodeId"
+      :node-name="node?.name"
+      @close="showUpdateContentModal = false"
+      @content-updated="$emit('data-updated')"
+    />
+    <SelectTrajectoryModal
+      :show="showSelectTrajectoryModal"
+      :node-id="props.nodeId"
+      @close="showSelectTrajectoryModal = false"
+      @trajectory-selected="handleTrajectorySelectedForAction"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { getNodeDetails, createAlert, getAlerts } from '@/api'
+import { getNodeDetails, createAlert, getAlerts, getTrajectoryGraph } from '@/api'
 import ReportRiskModal from './ReportRiskModal.vue'
 import RiskListModal from './RiskListModal.vue' // Import the new modal
 import SecurityAuditModal from './SecurityAuditModal.vue';
 import ContentAuditModal from './ContentAuditModal.vue';
+import UpdateContentModal from './UpdateContentModal.vue';
+import SelectTrajectoryModal from './SelectTrajectoryModal.vue';
 import { Vue3Marquee } from 'vue3-marquee'
+
+const trajectoryViewMode = ref('details');
+const riskyNodes = ref([]);
+const isNodeListLoading = ref(false);
+
+// New state for trajectory selection flow
+const showSelectTrajectoryModal = ref(false);
+const actionToPerform = ref(''); // 'contentAudit' or 'updateContent'
+const selectedTrajectoryForAction = ref(null);
+
+const getRiskColor = (level) => {
+  const colors = {
+    1: '#62f49c', 2: '#f4e562', 3: '#ff9900', 4: '#ff4e4e', 5: '#b30000',
+  };
+  return colors[level] || '#b8c2cc';
+};
 
 const props = defineProps({
   nodeId: String,
@@ -95,7 +153,7 @@ const props = defineProps({
   trajectory: Object,
 })
 
-const emit = defineEmits(['data-updated', 'view-trajectory-graph']);
+const emit = defineEmits(['data-updated', 'view-trajectory-graph', 'node-selected']);
 
 const node = ref(null)
 const loading = ref(false)
@@ -104,6 +162,7 @@ const showReportModal = ref(false)
 const showRiskListModal = ref(false) // State for the new modal
 const showSecurityAuditModal = ref(false)
 const showContentAuditModal = ref(false)
+const showUpdateContentModal = ref(false)
 const router = useRouter()
 const alerts = ref([])
 let pollingInterval = null
@@ -125,7 +184,9 @@ const displayMode = computed(() => {
 const title = computed(() => {
   if (displayMode.value === 'node') return 'Node Details'
   if (displayMode.value === 'province') return 'Province Details'
-  if (displayMode.value === 'trajectory') return 'Trajectory Details'
+  if (displayMode.value === 'trajectory') {
+    return trajectoryViewMode.value === 'details' ? 'Trajectory Details' : 'Risk Nodes';
+  }
   return 'Details'
 })
 
@@ -230,10 +291,57 @@ const handleReportSubmit = async (payload) => {
   }
 }
 
+const handleContentAudit = () => {
+  actionToPerform.value = 'contentAudit';
+  showSelectTrajectoryModal.value = true;
+};
+
+const handleUpdateContent = () => {
+  actionToPerform.value = 'updateContent';
+  showSelectTrajectoryModal.value = true;
+};
+
+const handleTrajectorySelectedForAction = (trajectory) => {
+  selectedTrajectoryForAction.value = trajectory;
+  showSelectTrajectoryModal.value = false;
+
+  if (actionToPerform.value === 'contentAudit') {
+    showContentAuditModal.value = true;
+  } else if (actionToPerform.value === 'updateContent') {
+    showUpdateContentModal.value = true;
+  }
+};
+
 onMounted(() => {
     fetchAlerts();
     pollingInterval = setInterval(fetchAlerts, 5000);
 });
+
+const handleTrajectoryAudit = async () => {
+  if (trajectoryViewMode.value === 'details') {
+    if (!props.trajectory?.id) return;
+    isNodeListLoading.value = true;
+    try {
+      const graphData = await getTrajectoryGraph(props.trajectory.id);
+      riskyNodes.value = (graphData.nodes || [])
+        .filter(n => (n.risk_level ?? n.runtime_level ?? 0) > 1)
+        .sort((a, b) => (b.risk_level ?? b.runtime_level ?? 0) - (a.risk_level ?? a.runtime_level ?? 0));
+    } catch (e) {
+      console.error("Failed to get trajectory nodes", e);
+      riskyNodes.value = [];
+    } finally {
+      isNodeListLoading.value = false;
+      trajectoryViewMode.value = 'riskList';
+    }
+  } else {
+    trajectoryViewMode.value = 'details';
+  }
+};
+
+watch(() => props.trajectory, () => {
+  trajectoryViewMode.value = 'details';
+  riskyNodes.value = [];
+}, { deep: true });
 
 onBeforeUnmount(() => {
     if (pollingInterval) {
@@ -315,4 +423,32 @@ onBeforeUnmount(() => {
 .alert-line.level-low { color: #62f49c; }
 
 @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+
+.risk-node-list-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.risk-node-list {
+  overflow-y: auto;
+  flex-grow: 1;
+}
+.risk-node-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 5px;
+  border-bottom: 1px solid #2a3a4a;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.risk-node-item:hover {
+  background-color: #2a3a4a;
+}
+.risk-node-item .node-name {
+  color: #e5e7eb;
+}
+.risk-node-item .node-risk {
+  font-weight: bold;
+}
 </style>
