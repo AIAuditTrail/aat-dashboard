@@ -122,7 +122,7 @@
 <script setup>
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { getNodeDetails, createAlert, getAlerts, getTrajectoryGraph } from '@/api'
+import { getNodeDetails, createAlert, getAlerts, getTrajectoryGraph, auditTrajectory } from '@/api'
 import ReportRiskModal from './ReportRiskModal.vue'
 import RiskListModal from './RiskListModal.vue' // Import the new modal
 import SecurityAuditModal from './SecurityAuditModal.vue';
@@ -322,6 +322,9 @@ const handleTrajectoryAudit = async () => {
     if (!props.trajectory?.id) return;
     isNodeListLoading.value = true;
     try {
+      // Perform a comprehensive content audit on the trajectory first
+      await auditTrajectory(props.trajectory.id);
+
       const graphData = await getTrajectoryGraph(props.trajectory.id);
       riskyNodes.value = (graphData.nodes || [])
         .filter(n => (n.risk_level ?? n.runtime_level ?? 0) > 1)
