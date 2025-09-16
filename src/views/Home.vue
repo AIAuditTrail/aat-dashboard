@@ -13,16 +13,14 @@
         <div class="div_any_child div_height">
           <!-- Mode Buttons -->
           <div class="tab-container">
-            <button class="tab-btn" :class="{ active: mode === 'map' }" @click="mode = 'map'">Map Mode</button>
-            <button class="tab-btn" :class="{ active: mode === 'node' }" @click="mode = 'node'">Node Mode</button>
+                        <button class="tab-btn" :class="{ active: mode === 'node' }" @click="mode = 'node'">Node Mode</button>
             <button class="tab-btn" :class="{ active: mode === 'list' }" @click="mode = 'list'">List Mode</button>
             <button class="tab-btn" :class="{ active: mode === 'trajectory' }" @click="mode = 'trajectory'">Trajectory Mode</button>
           </div>
 
           <!-- Chart Display Area -->
           <div class="chart-container">
-            <MapMode v-if="mode === 'map'" :provinces="stats.data?.provinces" @province-selected="handleProvinceSelected" />
-            <NodeMode v-if="mode === 'node'" :nodes="nodes.data" :loading="nodes.loading" :error="nodes.error" @node-selected="handleNodeSelected" />
+                        <NodeMode v-if="mode === 'node'" :nodes="nodes.data" :loading="nodes.loading" :error="nodes.error" @node-selected="handleNodeSelected" />
             <ListMode v-if="mode === 'list'" :nodes="nodes.data" :loading="nodes.loading" :error="nodes.error" @node-selected="handleNodeSelected" />
             <TrajectoryMode v-if="mode === 'trajectory'" :trajectories="trajectories.data" :loading="trajectories.loading" :error="trajectories.error" @trajectory-selected="handleTrajectorySelected" />
           </div>
@@ -64,7 +62,7 @@ import ChartsPanel from '@/components/ChartsPanel.vue'
 import TrajectoryGraphModal from '@/components/TrajectoryGraphModal.vue'
 import { getStatsOverview, getNodes, getTrajectories } from '@/api'
 
-const mode = ref('map')
+const mode = ref('node')
 
 const stats = reactive({ data: null, loading: true, error: null })
 const nodes = reactive({ data: [], loading: true, error: null })
