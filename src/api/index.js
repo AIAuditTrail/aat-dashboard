@@ -6,7 +6,7 @@ const API_BASE_URL = '/api';
 async function request(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
     try {
-        const response = await fetch(url, options);
+        const response = await fetch(url, { cache: 'no-store', ...options });
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -57,6 +57,18 @@ export const getNodeTrajectories = (id) => {
 // 3. Trajectories API
 export const getTrajectories = () => {
     return request('/trajectories');
+};
+
+export const getTrajectoryGraph = (id) => {
+    return request(`/trajectories/${id}/graph`);
+};
+
+export const auditTrajectory = (id) => {
+    return request(`/trajectories/${id}/audit`, { method: 'POST' });
+};
+
+export const injectRiskToTrajectory = (id) => {
+    return request(`/trajectories/${id}/inject-risk`, { method: 'POST' });
 };
 
 export const getTrajectoryTransactions = (id) => {

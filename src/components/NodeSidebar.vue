@@ -8,19 +8,24 @@
       </div>
       <div v-else-if="error" class="sidebar-content error-message">加载失败...</div>
       
-      <div v-else-if="displayMode !== 'none'" class="sidebar-content details-grid">
-        <template v-for="detail in details" :key="detail.label">
-          <div class="detail-item" :class="{ 'description': detail.isDescription }">
-            <span class="label">{{ detail.label }}:</span>
-            <span class="value" :class="detail.class || ''">{{ detail.value }}</span>
-          </div>
-        </template>
-        
+      <div v-else-if="displayMode !== 'none'" class="sidebar-content">
+        <div class="details-grid">
+          <template v-for="detail in details" :key="detail.label">
+            <div class="detail-item" :class="{ 'description': detail.isDescription }">
+              <span class="label">{{ detail.label }}:</span>
+              <span class="value" :class="detail.class || ''">{{ detail.value }}</span>
+            </div>
+          </template>
+        </div>
+
         <div v-if="displayMode === 'node'" class="actions">
           <button class="action-btn" @click="showReportModal = true">上报风险</button>
           <button class="action-btn" @click="handleShowRiskList">风险列表</button>
           <button class="action-btn" @click="showContentAuditModal = true">内容审计</button>
           <button class="action-btn" @click="handleSecurityAudit">安全审计</button>
+        </div>
+        <div v-if="displayMode === 'trajectory'" class="actions single">
+          <button class="action-btn" @click="handleViewTrajectoryGraph">查看轨迹拓扑</button>
         </div>
       </div>
       
@@ -85,13 +90,15 @@ import RiskListModal from './RiskListModal.vue' // Import the new modal
 import SecurityAuditModal from './SecurityAuditModal.vue';
 import ContentAuditModal from './ContentAuditModal.vue';
 import { Vue3Marquee } from 'vue3-marquee'
+import { buildIdentityProfile } from '@/utils/auditDisplay'
 
 const props = defineProps({
   nodeId: String,
   province: Object,
+  trajectory: Object,
 })
 
-const emit = defineEmits(['data-updated']);
+const emit = defineEmits(['data-updated', 'view-trajectory-graph']);
 
 const node = ref(null)
 const loading = ref(false)
@@ -117,12 +124,14 @@ const levelClass = computed(() => {
 const displayMode = computed(() => {
   if (props.nodeId && node.value) return 'node';
   if (props.province) return 'province';
+  if (props.trajectory) return 'trajectory';
   return 'none';
 })
 
 const title = computed(() => {
-  if (displayMode.value === 'node') return '节点详情'
+  if (displayMode.value === 'node') return '智能体身份档案'
   if (displayMode.value === 'province') return '省份详情'
+  if (displayMode.value === 'trajectory') return '轨迹详情'
   return '详情'
 })
 
@@ -138,8 +147,15 @@ const provinceNameMap = {
 const details = computed(() => {
   if (displayMode.value === 'node') {
     const totalRisk = (node.value.static_level || 0) + (node.value.runtime_level || 0);
+    const identity = buildIdentityProfile(node.value);
     return [
       { label: '名称', value: node.value.name },
+      { label: 'DID', value: identity.did },
+      { label: 'VC 状态', value: identity.vcStatus },
+      { label: '签发机构', value: identity.issuer, isDescription: true },
+      { label: '能力范围', value: identity.capability, isDescription: true },
+      { label: '责任主体', value: identity.owner, isDescription: true },
+      { label: '版本', value: identity.version },
       { label: '静态风险', value: node.value.static_level ?? 'N/A' },
       { label: '动态风险', value: node.value.runtime_level ?? 'N/A' },
       { label: '总风险等级', value: totalRisk, class: `level ${levelClass.value}` },
@@ -152,6 +168,15 @@ const details = computed(() => {
       { label: '节点总数', value: props.province.total_nodes },
       { label: '高危节点', value: props.province.high_risk_nodes_count },
       { label: '已解决警报', value: props.province.resolved_alerts_count }
+    ]
+  }
+  if (displayMode.value === 'trajectory') {
+    return [
+      { label: '标题', value: props.trajectory.title || '未命名轨迹', isDescription: true },
+      { label: 'Trajectory ID', value: props.trajectory.id, isDescription: true },
+      { label: '交互次数', value: props.trajectory.transaction_count ?? 0 },
+      { label: '创建时间', value: props.trajectory.created_at ? new Date(props.trajectory.created_at).toLocaleString() : '待接时间字段' },
+      { label: '证据说明', value: '拓扑中的证据哈希为审计摘要，正式证据以链上 InteractionEvent 为准。', isDescription: true },
     ]
   }
   return []
@@ -188,6 +213,12 @@ const handleShowRiskList = () => {
 
 const handleSecurityAudit = () => {
   showSecurityAuditModal.value = true;
+};
+
+const handleViewTrajectoryGraph = () => {
+  if (props.trajectory) {
+    emit('view-trajectory-graph', props.trajectory);
+  }
 };
 
 watch(() => props.nodeId, async (newNodeId) => {
@@ -240,7 +271,7 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 .detail-section {
-  flex: 2; /* Give more space to details */
+  flex: 3;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -260,12 +291,23 @@ onBeforeUnmount(() => {
   padding: 10px 0;
 }
 .sidebar-content { padding: 20px; color: #fff; }
+.detail-section .sidebar-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
 .placeholder p { text-align: center; color: #888; }
 .details-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
 .detail-item { display: flex; justify-content: space-between; align-items: flex-start; }
 .detail-item.description { flex-direction: column; align-items: flex-start; }
 .label { color: #aaa; flex-shrink: 0; margin-right: 10px; }
-.value { font-weight: bold; text-align: right; }
+.value { font-weight: bold; text-align: right; word-break: break-word; }
+.detail-item.description .value {
+  text-align: left;
+  margin-top: 4px;
+  color: #d7e7f7;
+  font-size: 13px;
+}
 .level { padding: 2px 6px; border-radius: 4px; color: #fff; }
 .level-critical { background-color: #b30000; } /* 9-10 */
 .level-high { background-color: #ff4e4e; } /* 7-8 */
@@ -277,6 +319,9 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+.actions.single {
+  grid-template-columns: 1fr;
 }
 .action-btn { 
   width: 100%; 

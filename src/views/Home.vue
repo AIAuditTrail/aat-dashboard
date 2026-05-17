@@ -16,6 +16,7 @@
             <button class="tab-btn" :class="{ active: mode === 'map' }" @click="mode = 'map'">地图模式</button>
             <button class="tab-btn" :class="{ active: mode === 'node' }" @click="mode = 'node'">节点模式</button>
             <button class="tab-btn" :class="{ active: mode === 'list' }" @click="mode = 'list'">列表模式</button>
+            <button class="tab-btn" :class="{ active: mode === 'trajectory' }" @click="mode = 'trajectory'">轨迹模式</button>
           </div>
 
           <!-- 图表展示区域 -->
@@ -23,35 +24,53 @@
             <MapMode v-if="mode === 'map'" :provinces="stats.data?.provinces" @province-selected="handleProvinceSelected" />
             <NodeMode v-if="mode === 'node'" :nodes="nodes.data" :loading="nodes.loading" :error="nodes.error" @node-selected="handleNodeSelected" />
             <ListMode v-if="mode === 'list'" :nodes="nodes.data" :loading="nodes.loading" :error="nodes.error" @node-selected="handleNodeSelected" />
+            <TrajectoryMode v-if="mode === 'trajectory'" :trajectories="trajectories.data" :loading="trajectories.loading" :error="trajectories.error" @trajectory-selected="handleTrajectorySelected" />
           </div>
         </div>
       </div>
 
       <!-- 节点右侧详情栏 -->
-      <NodeSidebar :node-id="selectedNodeId" :province="selectedProvince" :stats="stats.data" @data-updated="fetchData" />
+      <NodeSidebar
+        :node-id="selectedNodeId"
+        :province="selectedProvince"
+        :trajectory="selectedTrajectory"
+        :stats="stats.data"
+        @data-updated="fetchData"
+        @view-trajectory-graph="handleViewTrajectoryGraph"
+      />
     </div>
 
-    <!-- 独立的警报滚动区 -->
+    <TrajectoryGraphModal
+      :show="showTrajectoryModal"
+      :trajectory-id="selectedTrajectory?.id"
+      :trajectory-title="selectedTrajectory?.title"
+      @close="showTrajectoryModal = false"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, watch } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import MapMode from '@/components/modes/MapMode.vue'
 import NodeMode from '@/components/modes/NodeMode.vue'
 import ListMode from '@/components/modes/ListMode.vue'
+import TrajectoryMode from '@/components/modes/TrajectoryMode.vue'
 import NodeSidebar from '@/components/NodeSidebar.vue'
 import TopHeader from '@/components/TopHeader.vue'
 import OverviewStats from '@/components/OverviewStats.vue'
 import ChartsPanel from '@/components/ChartsPanel.vue'
-import { getStatsOverview, getNodes } from '@/api'
+import TrajectoryGraphModal from '@/components/TrajectoryGraphModal.vue'
+import { getStatsOverview, getNodes, getTrajectories } from '@/api'
 
 const mode = ref('map')
 
 const stats = reactive({ data: null, loading: true, error: null })
 const nodes = reactive({ data: [], loading: true, error: null })
+const trajectories = reactive({ data: [], loading: true, error: null })
 const selectedNodeId = ref(null)
 const selectedProvince = ref(null)
+const selectedTrajectory = ref(null)
+const showTrajectoryModal = ref(false)
 
 async function fetchStats() {
   try {
@@ -79,7 +98,7 @@ async function fetchStats() {
 }
 
 async function fetchData() {
-  await Promise.all([fetchStats(), fetchNodes()]);
+  await Promise.all([fetchStats(), fetchNodes(), fetchTrajectories()]);
 }
 
 async function fetchNodes() {
@@ -93,14 +112,38 @@ async function fetchNodes() {
   }
 }
 
+async function fetchTrajectories() {
+  try {
+    trajectories.loading = true
+    trajectories.data = await getTrajectories() || []
+  } catch (err) {
+    trajectories.error = err
+  } finally {
+    trajectories.loading = false
+  }
+}
+
 function handleNodeSelected(nodeId) {
   selectedNodeId.value = nodeId
   selectedProvince.value = null // Clear province on node selection
+  selectedTrajectory.value = null
 }
 
 function handleProvinceSelected(province) {
   selectedProvince.value = province
   selectedNodeId.value = null // Clear node on province selection
+  selectedTrajectory.value = null
+}
+
+function handleTrajectorySelected(trajectory) {
+  selectedTrajectory.value = trajectory
+  selectedNodeId.value = null
+  selectedProvince.value = null
+}
+
+function handleViewTrajectoryGraph(trajectory) {
+  selectedTrajectory.value = trajectory
+  showTrajectoryModal.value = true
 }
 
 onMounted(() => {

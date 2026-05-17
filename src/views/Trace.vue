@@ -42,6 +42,25 @@
             <button @click="resetAnimation" :disabled="!isChartReady">重置动画</button>
           </div>
         </div>
+
+        <div class="panel responsibility-panel">
+          <h3>责任链摘要</h3>
+          <div class="details-content">
+            <div class="detail-grid">
+              <div><strong>风险源节点:</strong> <span>{{ responsibilitySummary.sourceNode }}</span></div>
+              <div><strong>传播边数:</strong> <span>{{ responsibilitySummary.edgeCount }}</span></div>
+              <div><strong>证据哈希:</strong> <span class="hash-text">{{ responsibilitySummary.evidenceHash }}</span></div>
+              <div class="full-width-detail">
+                <strong>责任判断:</strong>
+                <p>{{ responsibilitySummary.conclusion }}</p>
+              </div>
+              <div class="full-width-detail">
+                <strong>字段说明:</strong>
+                <p>DID/证据哈希为溯源结果摘要，正式证据需结合签发记录和链上 InteractionEvent 复核。</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Right Panel -->
@@ -54,21 +73,22 @@
     <div v-if="isNodeDetailVisible" class="modal-overlay" @click="isNodeDetailVisible = false">
       <div class="modal-content" @click.stop>
         <h3 v-if="selectedNodeDetails">{{ selectedNodeDetails.name }}</h3>
-        <h3 v-else>Loading...</h3>
+        <h3 v-else>正在加载...</h3>
         <div v-if="isNodeDetailLoading" class="status-message">正在加载节点详情...</div>
         <div v-else-if="selectedNodeDetails" class="details-content">
           <div class="detail-grid">
             <div><strong>ID:</strong> <span>{{ selectedNodeDetails.id }}</span></div>
-            <div><strong>Province:</strong> <span>{{ selectedNodeDetails.province }}</span></div>
-            <div><strong>Static Level:</strong> <span>{{ selectedNodeDetails.static_level }}</span></div>
-            <div><strong>Runtime Level:</strong> <span>{{ selectedNodeDetails.runtime_level }}</span></div>
-            <div><strong>Effective Level:</strong> <span>{{ selectedNodeDetails.effective_level }}</span></div>
-            <div><strong>Trajectories:</strong> <span>{{ selectedNodeDetails.trajectory_count }}</span></div>
-            <div class="full-width-detail"><strong>Created At:</strong> <span>{{ new Date(selectedNodeDetails.created_at).toLocaleString() }}</span></div>
-            <div class="full-width-detail"><strong>Updated At:</strong> <span>{{ new Date(selectedNodeDetails.updated_at).toLocaleString() }}</span></div>
+            <div><strong>DID:</strong> <span>{{ selectedNodeIdentity.did }}</span></div>
+            <div><strong>VC 状态:</strong> <span>{{ selectedNodeIdentity.vcStatus }}</span></div>
+            <div><strong>责任主体:</strong> <span>{{ selectedNodeIdentity.owner }}</span></div>
+            <div><strong>省份:</strong> <span>{{ selectedNodeDetails.province }}</span></div>
+            <div><strong>静态风险:</strong> <span>{{ selectedNodeDetails.static_level }}</span></div>
+            <div><strong>动态风险:</strong> <span>{{ selectedNodeDetails.runtime_level }}</span></div>
+            <div><strong>有效风险:</strong> <span>{{ selectedNodeDetails.effective_level }}</span></div>
+            <div><strong>轨迹数:</strong> <span>{{ selectedNodeDetails.trajectory_count }}</span></div>
           </div>
           <div class="panel-actions">
-            <button @click="isNodeDetailVisible = false">Close</button>
+            <button @click="isNodeDetailVisible = false">关闭</button>
           </div>
         </div>
       </div>
@@ -78,9 +98,10 @@
 </template>
 
 <script setup>
-import {ref, onMounted, onBeforeUnmount, shallowRef, nextTick} from 'vue';
+import {computed, ref, onMounted, onBeforeUnmount, shallowRef, nextTick} from 'vue';
 import {useRoute} from 'vue-router';
 import {runTrace, getAlertDetails, getTraceRun, getNodeDetails} from '@/api';
+import { buildEvidenceRecord, buildIdentityProfile } from '@/utils/auditDisplay';
 
 import * as echarts from 'echarts/core';
 import {GraphChart} from 'echarts/charts';
@@ -128,6 +149,23 @@ const LABEL_STYLE = {
   padding: [3, 5],
   borderRadius: 3
 };
+
+const selectedNodeIdentity = computed(() => buildIdentityProfile(selectedNodeDetails.value || {}));
+
+const responsibilitySummary = computed(() => {
+  const data = traceData.value;
+  const source = data?.source_node_id || data?.summary?.source_node_id || alertDetails.value?.node_id || alertDetails.value?.node?.id;
+  const edges = Array.isArray(data?.edges) ? data.edges : [];
+  const evidence = edges.length ? buildEvidenceRecord(edges[0], alertDetails.value?.trajectory_id || '待接轨迹编号', 0) : null;
+  return {
+    sourceNode: source ? String(source) : '待进一步审计确认',
+    edgeCount: edges.length ? `${edges.length} 条` : '待进一步审计确认',
+    evidenceHash: evidence?.interactionHash || '待进一步审计确认',
+    conclusion: source
+      ? '系统已根据当前溯源结果定位候选风险源；最终责任仍需结合真实 DID/VC 与链上 InteractionEvent 复核。'
+      : '当前仅有上报信息，尚未完成风险溯源计算。'
+  };
+});
 
 /* ---------- Node Click Handler ---------- */
 async function handleNodeClick(params) {
@@ -568,9 +606,9 @@ onBeforeUnmount(() => {
 .trace-content-grid {
   flex-grow: 1;
   display: grid;
-  grid-template-columns:350px 1fr;
-  gap: 20px;
-  padding: 20px;
+  grid-template-columns:340px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
   min-height: 0;
 }
 
@@ -581,10 +619,15 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
+.left-panel {
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .panel {
   background: #1e2a38;
   border-radius: 6px;
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
 }
@@ -599,8 +642,37 @@ onBeforeUnmount(() => {
 }
 
 .alert-details-panel {
-  flex-grow: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+}
+
+.alert-details-panel .detail-grid {
+  grid-template-columns: 1fr;
+}
+
+.alert-details-panel .detail-grid > div:not(.full-width-detail) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.responsibility-panel {
+  flex-shrink: 0;
+}
+
+.responsibility-panel .detail-grid {
+  grid-template-columns: 1fr;
+}
+
+.responsibility-panel .detail-grid > div:not(.full-width-detail) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.responsibility-panel .detail-grid span {
+  word-break: break-word;
 }
 
 .details-content {
@@ -611,12 +683,12 @@ onBeforeUnmount(() => {
 .animation-panel {
   flex-grow: 1;
   padding: 10px;
-  min-height: 420px;
+  min-height: 0;
 }
 
 .panel-actions {
-  margin-top: auto;
-  padding-top: 20px;
+  margin-top: 14px;
+  padding-top: 14px;
   border-top: 1px solid #3a4a5c;
   display: flex;
   gap: 10px;
@@ -625,7 +697,7 @@ onBeforeUnmount(() => {
 
 h3 {
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
   border-bottom: 1px solid #3a4a5c;
   padding-bottom: 10px;
   flex-shrink: 0;
@@ -651,8 +723,14 @@ h3 {
   margin: 0;
 }
 
+.hash-text {
+  color: #a0c8ff;
+  word-break: break-all;
+  font-size: 12px;
+}
+
 button {
-  padding: 8px 15px;
+  padding: 8px 14px;
   border-radius: 4px;
   border: none;
   cursor: pointer;
