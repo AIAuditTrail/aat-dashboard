@@ -44,7 +44,7 @@
 
 <script setup>
 import { ref, reactive, watch } from 'vue';
-import { getNodeTrajectories, getNodeOutput, updateNodeOutput } from '@/api';
+import { getNodeTrajectories, getNodeOutput, updateNodeOutput, auditTrajectory } from '@/api';
 
 const props = defineProps({
   show: Boolean,
@@ -103,17 +103,27 @@ const handleSubmit = async () => {
   }
   submitting.value = true;
   try {
-    const response = await updateNodeOutput(selectedTrajectoryId.value, props.nodeId, form);
-    if (response.riskLevelElevated) {
-      alert('内容包含敏感信息，风险等级已自动提升！');
+    await updateNodeOutput(selectedTrajectoryId.value, props.nodeId, form);
+  } catch (err) {
+    console.error('Failed to update content:', err);
+    alert('内容保存失败！');
+    submitting.value = false;
+    return;
+  }
+
+  try {
+    const auditResult = await auditTrajectory(selectedTrajectoryId.value);
+    const riskCount = auditResult?.risk_found_at?.length || 0;
+    if (riskCount > 0) {
+      alert(`内容已保存，并完成轨迹内容审计：发现 ${riskCount} 个高风险输出节点。`);
     } else {
-      alert('内容更新成功。');
+      alert('内容已保存，并完成轨迹内容审计：未发现高风险输出。');
     }
     emit('data-updated');
     close();
   } catch (err) {
-    console.error('Failed to update content:', err);
-    alert('内容更新失败！');
+    console.error('Failed to audit trajectory content:', err);
+    alert('内容已保存，但自动内容审计失败！');
   } finally {
     submitting.value = false;
   }
